@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function MatchesScreen() {
+export default function ProfileScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>⚽ Jogos da Copa</Text>
-      <Text>Aqui vão aparecer as partidas para você palpitar!</Text>
+      <Text style={styles.title}>👤 Meu Perfil</Text>
+      <Text>Aqui você pode ver suas regras e configurações.</Text>
     </View>
   );
 }
