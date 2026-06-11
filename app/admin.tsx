@@ -191,8 +191,8 @@ export default function AdminScreen() {
 
       predictionsSnap.forEach((predDoc) => {
         const palpite = predDoc.data();
-        const predA = palpite.scoreA;
-        const predB = palpite.scoreB;
+        const predA = Number(palpite.scoreA);
+        const predB = Number(palpite.scoreB);
         
         let pontosGanhos = 0;
         let cravada = 0;

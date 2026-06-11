@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
+import Toast from 'react-native-toast-message';
 import { auth } from '../firebaseConfig';
 
 export default function RootLayout() {
@@ -30,10 +31,15 @@ export default function RootLayout() {
   }, [isAuthenticated, segments]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" /> {/* Adicionamos a tela nova aqui */}
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" /> {/* Adicionamos a tela nova aqui */}
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+      
+      {/* O Toast entra aqui, "flutuando" por cima de todas as telas do Stack */}
+      <Toast />
+    </>
   );
 }

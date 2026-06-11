@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { auth, db } from '../../firebaseConfig';
 
 interface Match {
@@ -34,21 +35,12 @@ export default function MatchesScreen() {
   };
 
   // FUNÇÃO CRUCIAL: Verifica se faltar menos de 1 hora para o jogo
-  const isMatchLocked = (matchIsoDate: string) => {
-    try {
-      const matchDate = new Date(matchIsoDate);
-      if (isNaN(matchDate.getTime())) return false;
-
-      const now = new Date();
-      const differenceInMs = matchDate.getTime() - now.getTime();
-      const oneHourInMs = 60 * 60 * 1000;
-
-      // Bloqueia se a diferença for menor que 1 hora (ou se o jogo já passou/começou)
-      return differenceInMs < oneHourInMs;
-    } catch (e) {
-      return false;
-    }
-  };
+  const isMatchLocked = (matchDateString: string) => {
+  const matchDate = new Date(matchDateString);
+  const now = new Date();
+  // Trava apenas se o horário atual for maior ou igual ao horário do jogo
+  return now.getTime() >= matchDate.getTime();
+};
 
   useEffect(() => {
     const matchesRef = collection(db, 'matches');
@@ -101,38 +93,38 @@ export default function MatchesScreen() {
     }));
   };
 
-  const handleSavePrediction = async (matchId: string, matchDate: string) => {
-    if (!currentUser) return;
+  const handleSavePrediction = async (matchId: string, scoreA: string, scoreB: string) => {
+  if (!auth.currentUser) return;
 
-    // Segurança extra caso tentem burlar a interface do app
-    if (isMatchLocked(matchDate)) {
-      return Alert.alert('Erro', 'Os palpites para este jogo já foram encerrados!');
-    }
-    
-    const palpite = predictions[matchId];
-    if (!palpite?.scoreA || !palpite?.scoreB) {
-      return Alert.alert('Ops', 'Digite o placar completo antes de salvar!');
-    }
+  try {
+    // Criamos um ID único para o palpite combinando o ID do usuário + ID do jogo
+    // Isso impede que o mesmo usuário crie dois palpites para o mesmo jogo!
+    const predictionId = `${auth.currentUser.uid}_${matchId}`;
+    const predictionRef = doc(db, 'predictions', predictionId);
 
-    setSaving(true);
-    try {
-      const predictionId = `${currentUser.uid}_${matchId}`;
-      
-      await setDoc(doc(db, 'predictions', predictionId), {
-        userId: currentUser.uid,
-        matchId: matchId,
-        scoreA: parseInt(palpite.scoreA),
-        scoreB: parseInt(palpite.scoreB),
-        updatedAt: new Date(),
-      });
+    // USAMOS SETDOC COM MERGE:
+    // Se o palpite não existir (2º jogo), ele cria. Se já existir, ele só atualiza!
+    await setDoc(predictionRef, {
+      userId: auth.currentUser.uid,
+      matchId: matchId,
+      scoreA: Number(scoreA), // Já salvando como número para não quebrar o Admin!
+      scoreB: Number(scoreB), // Já salvando como número para não quebrar o Admin!
+      updatedAt: new Date(),
+    }, { merge: true });
 
-      Alert.alert('Boa!', 'Seu palpite foi registrado com sucesso.');
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível salvar o palpite.');
-    } finally {
-      setSaving(false);
-    }
-  };
+    Toast.show({
+      type: 'success',
+      text1: 'Palpite Salvo! ⚽',
+      text2: 'Seu placar foi registrado com sucesso.',
+      position: 'top', // Pode ser 'bottom' se preferir que apareça embaixo
+      visibilityTime: 3000, // Some sozinho após 3 segundos
+    });
+  } catch (error) {
+    console.log("Erro ao salvar palpite:", error);
+    if (Platform.OS === 'web') window.alert('Erro ao salvar palpite.');
+    else Alert.alert('Erro', 'Não foi possível salvar seu palpite.');
+  }
+};
 
   const renderMatchCard = ({ item }: { item: Match }) => {
     const locked = isMatchLocked(item.date); // Descobre se o jogo está travado
@@ -176,7 +168,7 @@ export default function MatchesScreen() {
         {/* Altera o botão dependendo do status de bloqueio */}
         <TouchableOpacity 
           style={[styles.saveButton, locked ? styles.saveButtonLocked : null]} 
-          onPress={() => handleSavePrediction(item.id, item.date)}
+          onPress={() => handleSavePrediction(item.id, predictions[item.id]?.scoreA || '', predictions[item.id]?.scoreB || '')}
           disabled={saving || locked}
         >
           <Text style={styles.saveButtonText}>

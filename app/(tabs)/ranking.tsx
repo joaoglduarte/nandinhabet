@@ -1,7 +1,7 @@
-import { useRouter } from 'expo-router'; // <--- ESTE é o import correto
+import { useRouter } from 'expo-router';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../firebaseConfig'; // Volta duas pastas para achar o arquivo na raiz
 
 // Tipagem para ajudar o TypeScript a entender os dados
@@ -10,12 +10,19 @@ interface UserRanking {
   nickname: string;
   totalPoints: number;
   exactMatches: number;
+  avatar?: string;
 }
 
 export default function RankingScreen() {
+  const router = useRouter();
+
+  const getAvatarUrl = (seed?: string) => {
+    if (!seed) return `https://api.dicebear.com/7.x/notionists/png?seed=Felix&backgroundColor=e2e8f0`;
+    return `https://api.dicebear.com/7.x/notionists/png?seed=${seed}&backgroundColor=e2e8f0`;
+  };
+
   const [rankingData, setRankingData] = useState<UserRanking[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     // Aponta para a coleção 'users' e ordena pelos pontos (do maior para o menor)
@@ -31,6 +38,7 @@ export default function RankingScreen() {
           nickname: doc.data().nickname || 'Sem Nome',
           totalPoints: doc.data().totalPoints || 0,
           exactMatches: doc.data().exactMatches || 0,
+          avatar: doc.data().avatar,
         });
       });
 
@@ -52,12 +60,18 @@ export default function RankingScreen() {
       <TouchableOpacity 
         style={styles.rankingRow}
         // @ts-ignore
-        onPress={() => router.push(`/user/${item.id}` as any)}
+        onPress={() => router.push(`/user?id=${item.id}` as any)}
         activeOpacity={0.7}
       >
         <View style={[styles.positionBadge, { backgroundColor: positionColor }]}>
           <Text style={styles.positionText}>{index + 1}º</Text>
         </View>
+
+        {/* FOTO DO PERFIL AQUI ⬇️ */}
+        <Image 
+          source={{ uri: getAvatarUrl(item.avatar) }} 
+          style={styles.avatarMini} 
+        />
         
         <View style={styles.nameContainer}>
           <Text style={[styles.name, isTop3 && styles.nameTop3]}>{item.nickname}</Text>
@@ -78,6 +92,7 @@ export default function RankingScreen() {
       </View>
     );
   }
+  
 
   return (
     <View style={styles.container}>
@@ -116,4 +131,11 @@ const styles = StyleSheet.create({
   nameTop3: { fontWeight: 'bold', color: '#0f172a' },
   exactMatches: { fontSize: 12, color: '#64748b', marginTop: 4 },
   points: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
+  avatarMini: {
+    width: 44,
+    height: 44,
+    borderRadius: 22, // Metade da largura para ficar um círculo perfeito
+    backgroundColor: '#e2e8f0',
+    marginRight: 12,
+  },
 });

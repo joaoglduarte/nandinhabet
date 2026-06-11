@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Toast } from 'react-native-toast-message/lib/src/Toast';
 import { auth, db } from '../../firebaseConfig';
 
 export default function TournamentScreen() {
@@ -12,10 +13,13 @@ export default function TournamentScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Vai guardar se o usuário já tem um palpite salvo no banco
+  const [hasExistingBet, setHasExistingBet] = useState(false);
+
   const currentUser = auth.currentUser;
 
   // DATA DE INÍCIO DO TORNEIO - Mude para o horário do primeiro jogo real!
-  const TOURNAMENT_START_DATE = '2026-06-11T16:00:00'; 
+  const TOURNAMENT_START_DATE = '2026-06-12T16:00:00'; 
 
   const isTournamentLocked = () => {
     const startDate = new Date(TOURNAMENT_START_DATE);
@@ -27,7 +31,12 @@ export default function TournamentScreen() {
 
   useEffect(() => {
     const fetchTournamentBet = async () => {
-      if (!currentUser) return;
+      // SE NÃO HOUVER USUÁRIO: Desativa o loading antes de sair da função!
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const betDoc = await getDoc(doc(db, 'tournament_bets', currentUser.uid));
         if (betDoc.exists()) {
@@ -36,6 +45,7 @@ export default function TournamentScreen() {
           setRunnerUp(data.runnerUp || '');
           setThirdPlace(data.thirdPlace || '');
           setTopScorer(data.topScorer || '');
+          setHasExistingBet(true);
         }
       } catch (error) {
         console.log("Erro ao buscar palpite do torneio:", error);
@@ -43,36 +53,77 @@ export default function TournamentScreen() {
         setLoading(false);
       }
     };
+    
     fetchTournamentBet();
   }, [currentUser]);
 
   const handleSave = async () => {
     if (!currentUser) return;
     if (locked) {
+      if (Platform.OS === 'web') return window.alert('Fechado: Os palpites do torneio já foram encerrados!');
       return Alert.alert('Fechado', 'Os palpites do torneio já foram encerrados!');
     }
     if (!champion || !runnerUp || !thirdPlace || !topScorer) {
+      if (Platform.OS === 'web') return window.alert('Aviso: Preencha todos os campos antes de salvar.');
       return Alert.alert('Aviso', 'Preencha todos os campos antes de salvar.');
     }
 
-    setSaving(true);
-    try {
-      await setDoc(doc(db, 'tournament_bets', currentUser.uid), {
-        userId: currentUser.uid,
-        champion: champion.trim(),
-        runnerUp: runnerUp.trim(),
-        thirdPlace: thirdPlace.trim(),
-        topScorer: topScorer.trim(),
-        updatedAt: new Date(),
-      });
-      Alert.alert('Sucesso', 'Seus palpites de longo prazo foram salvos!');
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível salvar.');
-    } finally {
-      setSaving(false);
+    const titleText = hasExistingBet ? 'Alterar Palpites' : 'Confirmar Palpites';
+    const messageText = hasExistingBet 
+      ? 'Você está prestes a editar seus palpites finais. Tem certeza?' 
+      : 'Tem certeza que deseja salvar estes como seus palpites finais?';
+
+    // FUNÇÃO QUE REALMENTE SALVA NO BANCO (Separada para não repetir código)
+    const performSave = async () => {
+      setSaving(true);
+      try {
+        await setDoc(doc(db, 'tournament_bets', currentUser.uid), {
+          userId: currentUser.uid,
+          champion: champion.trim(),
+          runnerUp: runnerUp.trim(),
+          thirdPlace: thirdPlace.trim(),
+          topScorer: topScorer.trim(),
+          updatedAt: new Date(),
+        });
+        
+        setHasExistingBet(true);
+        Toast.show({
+        type: 'success',
+        text1: 'Palpite Salvo! ⚽',
+        text2: 'Seus palpites finais foram registrados com sucesso.',
+        position: 'top', // Pode ser 'bottom' se preferir que apareça embaixo
+        visibilityTime: 3000, // Some sozinho após 3 segundos
+    });
+      } catch (error) {
+        if (Platform.OS === 'web') {
+          window.alert('Erro: Não foi possível salvar.');
+        } else {
+          Alert.alert('Erro', 'Não foi possível salvar.');
+        }
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    // DIVISÃO DE PLATAFORMAS: WEB vs NATIVO
+    if (Platform.OS === 'web') {
+      // Usa a caixa de confirmação nativa do navegador
+      const confirmed = window.confirm(`${titleText}\n\n${messageText}`);
+      if (confirmed) {
+        performSave();
+      }
+    } else {
+      // Usa a caixa do React Native para iOS/Android
+      Alert.alert(
+        titleText,
+        messageText,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sim, salvar!', onPress: performSave }
+        ]
+      );
     }
   };
-
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center' }]}>
@@ -88,7 +139,7 @@ export default function TournamentScreen() {
         <Text style={styles.headerSubtitle}>
           {locked 
             ? 'Palpites encerrados! Agora é torcer.' 
-            : 'Acerte o pódio e o artilheiro para ganhar pontos massivos no final do bolão!'}
+            : 'Acerte o pódio e o artilheiro para ganhar pontos massivos no final do bolão! Obs: preencha todos os campos para salvá-los!'}
         </Text>
 
         <View style={[styles.card, locked && styles.cardLocked]}>

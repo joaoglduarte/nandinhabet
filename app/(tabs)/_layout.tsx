@@ -14,6 +14,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <FontAwesome name="soccer-ball-o" size={24} color={color} />,
         }}
       />
+        <Tabs.Screen
+        name="tournament" // O nome do arquivo físico ainda é tournament.tsx
+        options={{
+          title: 'Palpites Finais', // O nome que aparece na tela e na barra
+          // Trocamos o triângulo por um troféu (trophy) ou uma estrela (star)
+          tabBarIcon: ({ color }) => <FontAwesome name="star" size={24} color={color} />, 
+        }}
+      />
       <Tabs.Screen
         name="ranking"
         options={{
@@ -26,6 +34,14 @@ export default function TabLayout() {
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />,
+        }}
+      />
+      {/* ABA DE REGRAS */}
+      <Tabs.Screen
+        name="rules"
+        options={{
+          title: 'Regras',
+          tabBarIcon: ({ color }) => <FontAwesome name="book" size={24} color={color} />,
         }}
       />
     </Tabs>
