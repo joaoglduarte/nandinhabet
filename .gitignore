@@ -41,3 +41,7 @@ yarn-error.*
 /android
 
 .env
+
+# Firebase
+.firebase/
+*.cache
