@@ -1,24 +1,28 @@
-# 🏆 Bolaobet (bet da nandinha)
+# NandinhaBet ⚽
 
-Um aplicativo focado na experiência de "Single Page Application" (SPA) para você e seus amigos darem palpites nos jogos da Copa e disputarem o topo do ranking!
+O NandinhaBet é uma plataforma de bolão esportivo completa, desenvolvida com React Native (Expo) e Firebase, permitindo palpites em tempo real, ranking dinâmico e integração com sistemas de gestão.
 
-## 🚀 Tecnologias Utilizadas
+## 🚀 Funcionalidades
+- **Palpites em Tempo Real**: Sistema de palpites com travamento automático no início da partida (com tolerância de 15min).
+- **Ranking Inteligente**: Exibição de pontuação, avatares customizados e critérios de desempate.
+- **Sistema de Pontuação Justo**: 
+    - 5 pontos para placar exato (cravada).
+    - 2 pontos para acerto de vencedor/empate.
+- **Segurança Blindada**: Regras do Firestore que impedem manipulação de pontos pelos usuários.
+- **Experiência PWA**: Otimizado para rodar como app na tela inicial (iOS/Android) via Web.
+- **Feedback Proativo**: Notificações Toast elegantes para ações de usuário.
 
-*   **React Native & Expo (SDK 56):** Base do aplicativo.
-*   **Expo Router:** Gerenciamento da navegação por abas com transições fluidas.
-*   **Firebase (Em breve):** Autenticação de usuários e banco de dados em tempo real (Firestore) para os palpites e placares.
+## 🛠 Tecnologias
+- **Frontend**: React Native, Expo, Expo Router.
+- **Backend**: Firebase Firestore (NoSQL), Firebase Auth.
+- **Design**: DiceBear Avatars API.
 
-## 📱 Estrutura do App
+## 📦 Como rodar o projeto
+1. Clone o repositório.
+2. Instale as dependências: `npm install`.
+3. Configure o seu `firebaseConfig.js` com as suas credenciais.
+4. Rode o projeto: `npx expo start -c`.
 
-O aplicativo está dividido nas seguintes telas principais (navegação por abas):
-1.  **Jogos (`index.tsx`):** Onde os usuários verão as partidas e inserirão seus palpites.
-2.  **Ranking (`ranking.tsx`):** A tabela de classificação atualizada do grupo de amigos.
-3.  **Perfil (`profile.tsx`):** Regras de pontuação e configurações da conta.
-
-## 💻 Como rodar o projeto localmente
-
-Siga os passos abaixo para testar o aplicativo na sua máquina:
-
-1. Clone este repositório:
-```bash
-   git clone [https://github.com/joaoglduarte/bolaobet.git](https://github.com/joaoglduarte/bolaobet.git)
+## ⚙️ Configuração de Produção
+- O app está configurado como **PWA**.
+- As regras de segurança do Firestore devem ser aplicadas através do console do Firebase para garantir a integridade dos dados de pontuação.
