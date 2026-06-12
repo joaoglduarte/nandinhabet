@@ -17,7 +17,7 @@ const PONTOS_ARTILHEIRO = 15;
 const JOGOS_DA_COPA = [
   // 11 de junho
   { id: 'jogo_01', teamA: 'México', teamB: 'África do Sul', date: '2026-06-11T16:00:00-03:00' },
-  { id: 'jogo_02', teamA: 'República da Coreia', teamB: 'República Tcheca', date: '2026-06-11T23:00:00-03:00' },
+  { id: 'jogo_02', teamA: 'República da Coreia', teamB: 'República Tcheca', date: '2026-06-11T23:40:00-03:00' },
   // 12 de junho
   { id: 'jogo_03', teamA: 'Canadá', teamB: 'Bósnia e Herzegovina', date: '2026-06-12T16:00:00-03:00' },
   { id: 'jogo_04', teamA: 'Estados Unidos', teamB: 'Paraguai', date: '2026-06-12T22:00:00-03:00' },
