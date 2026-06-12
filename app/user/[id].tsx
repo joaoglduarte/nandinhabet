@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../firebaseConfig';
+
 
 export default function UserProfileScreen() {
   // Pega o ID que passamos pela URL (o nome do arquivo é [id].tsx)
@@ -13,6 +14,12 @@ export default function UserProfileScreen() {
   const [tournamentBet, setTournamentBet] = useState<any>(null);
   const [predictions, setPredictions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getAvatarUrl = (seed?: string) => {
+  if (!seed) return `https://api.dicebear.com/7.x/notionists/png?seed=Felix&backgroundColor=e2e8f0`;
+  return `https://api.dicebear.com/7.x/notionists/png?seed=${seed}&backgroundColor=e2e8f0`;
+};
+
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -86,6 +93,15 @@ export default function UserProfileScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>← Voltar</Text>
         </TouchableOpacity>
+
+        {/* FOTO DO PERFIL IGUALZINHA AO DO RANKING */}
+        {userProfile && (
+          <Image 
+            source={{ uri: getAvatarUrl(userProfile.avatar || userProfile.nickname) }} 
+            style={styles.avatar} 
+          />
+        )}
+
         <Text style={styles.nickname}>{userProfile?.nickname || 'Jogador'}</Text>
         <Text style={styles.points}>{userProfile?.totalPoints || 0} pts</Text>
         <Text style={styles.exactMatches}>{userProfile?.exactMatches || 0} cravadas na mosca</Text>
@@ -143,5 +159,14 @@ const styles = StyleSheet.create({
   matchCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   matchTeams: { fontSize: 16, fontWeight: '600', color: '#334155', flex: 1 },
   scoreBadge: { backgroundColor: '#f8fafc', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' },
-  scoreText: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' }
+  scoreText: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
+  avatar: { 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
+    backgroundColor: '#ffffff', // Fundo branco caso o ícone seja transparente
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#ffffff'
+  },
 });

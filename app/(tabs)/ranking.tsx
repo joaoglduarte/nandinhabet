@@ -60,7 +60,7 @@ export default function RankingScreen() {
       <TouchableOpacity 
         style={styles.rankingRow}
         // @ts-ignore
-        onPress={() => router.push(`/user?id=${item.id}` as any)}
+        onPress={() => router.push(`/user/${item.id}` as any)}
         activeOpacity={0.7}
       >
         <View style={[styles.positionBadge, { backgroundColor: positionColor }]}>
