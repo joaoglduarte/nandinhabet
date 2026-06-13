@@ -8,7 +8,7 @@ import { auth, db } from '../../firebaseConfig';
 
 
 // Adicionamos 'Careca' na lista
-const AVATAR_SEEDS = ['Alex', 'Jordan', 'Luca', 'Clara', 'Bruno', 'Elena', 'maria', 'nandinha', '0m5nhf5', 'jg'];
+const AVATAR_SEEDS = ['Alex', 'Jordan', 'Luca', 'Clara', 'Bruno', 'Elena', 'maria', 'nandinha', '0m5nhf5', 'jg', 'liponez', '3hj24', 'bnksnd', 'catatau', 'betuca', 'smtfelipe', 'sdaiy548', 'b6453b', 'casio', 'leticiaramosdeoliveira', '674267'];
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
@@ -158,7 +158,7 @@ export default function ProfileScreen() {
       {isEditingAvatar && (
         <View style={styles.carouselContainer}>
           <Text style={styles.sectionTitle}>Escolha seu visual:</Text>
-          <FlatList horizontal data={AVATAR_SEEDS} renderItem={renderAvatarOption} keyExtractor={item => item} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }} />
+          <FlatList horizontal data={AVATAR_SEEDS} renderItem={renderAvatarOption} keyExtractor={item => item} showsHorizontalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20 }} />
           <TouchableOpacity style={styles.saveAvatarButton} onPress={handleSaveAvatar} disabled={savingAvatar}>
             <Text style={styles.saveAvatarText}>{savingAvatar ? 'Salvando...' : 'Salvar Novo Avatar'}</Text>
           </TouchableOpacity>
