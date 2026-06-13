@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { onAuthStateChanged, signOut, updateEmail } from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { auth, db } from '../../firebaseConfig';
 
@@ -18,7 +18,8 @@ export default function ProfileScreen() {
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [selectedAvatarSeed, setSelectedAvatarSeed] = useState('');
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
-
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [novoNome, setNovoNome] = useState('');
   const currentUser = auth.currentUser;
   const router = useRouter();
 
@@ -121,13 +122,81 @@ export default function ProfileScreen() {
   const handleShare = async () => {
     try {
       const pontos = userData?.totalPoints || 0;
-      const message = `Estou competindo no Bolão NandinhaBet e já tenho ${pontos} pontos! 🏆\n\nAcesse o link e tente me bater: https://nandinhabet-be12d.web.app`;
+      const message = `Estou competindo no NandinhaBet e já tenho ${pontos} pontos! 🏆\n\nAcesse o link se tiver aura e tente me bater: https://nandinhabet-be12d.web.app`;
       
       await Share.share({
         message: message,
       });
     } catch (error) {
       console.log("Erro ao compartilhar", error);
+    }
+  };
+
+  
+
+  const handleMudarNomeELogin = async () => {
+    const user = auth.currentUser;
+    
+    // Verificações de segurança
+    if (!user) return;
+    if (!novoNome.trim()) {
+      Toast.show({ type: 'error', text1: 'Aviso', text2: 'Digite um novo nome válido.' });
+      return;
+    }
+
+    // 🔥 NOVA VALIDAÇÃO: Evita salvar o mesmo nome
+    if (novoNome.trim() === userData?.nickname) {
+      Toast.show({ 
+        type: 'error', 
+        text1: 'Mesmo apelido 🔄', 
+        text2: 'O novo apelido precisa ser diferente do atual.' 
+      });
+      return;
+    }
+
+    // 1. Prepara o novo e-mail (Exatamente como fizemos no Register)
+    const safeNickname = novoNome
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ''); 
+
+    const novoFakeEmail = safeNickname + '@nandinhabet.com';
+
+    try {
+      // 2. Tenta atualizar o login (Autenticação)
+      await updateEmail(user, novoFakeEmail);
+
+      // 3. Se deu certo, atualiza o nome visual (Firestore)
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        nickname: novoNome.trim()
+      });
+
+      Toast.show({ type: 'success', text1: 'Sucesso! 🎉', text2: 'Seu nome e login foram alterados.' });
+      setNovoNome(''); // Limpa o campo
+      
+    } catch (error: any) {
+      console.log("Erro ao mudar nome:", error);
+      
+      // Tratamento de erros cruciais
+      if (error.code === 'auth/email-already-in-use') {
+        Toast.show({ type: 'error', text1: 'Nome indisponível', text2: 'Alguém já está usando esse apelido.' });
+      } 
+      // O FIREBASE EXIGE LOGIN RECENTE PARA MUDAR DADOS SENSÍVEIS
+      else if (error.code === 'auth/requires-recent-login') {
+        Toast.show({ 
+          type: 'error', 
+          text1: 'Por segurança 🛡️', 
+          text2: 'Saia da conta, faça o login novamente e tente alterar.' 
+        });
+      } else {
+        Toast.show({ 
+          type: 'error', 
+          text1: 'Erro Detalhado', 
+          text2: error.code || error.message || 'Erro desconhecido'});
+      }
     }
   };
 
@@ -147,6 +216,11 @@ export default function ProfileScreen() {
             <Text style={styles.editButtonText}>{isEditingAvatar ? 'Cancelar Edição' : 'Mudar Avatar'}</Text>
           </TouchableOpacity>
 
+          {/* 👈 NOVO BOTÃO DE MUDAR NOME AQUI */}
+          <TouchableOpacity style={styles.editButton} onPress={() => setIsEditingName(!isEditingName)}>
+            <Text style={styles.editButtonText}>{isEditingName ? 'Cancelar Edição' : 'Editar Nome'}</Text>
+          </TouchableOpacity>
+
           {currentUser?.uid === '8wPW5SLYdiUDKVWRBhEuOSL45d72' && (
             <TouchableOpacity style={styles.adminButton} onPress={() => router.push('/admin')}>
               <Text style={styles.adminButtonText}>Painel Admin ⚙️</Text>
@@ -161,6 +235,22 @@ export default function ProfileScreen() {
           <FlatList horizontal data={AVATAR_SEEDS} renderItem={renderAvatarOption} keyExtractor={item => item} showsHorizontalScrollIndicator={true} contentContainerStyle={{ paddingHorizontal: 20 }} />
           <TouchableOpacity style={styles.saveAvatarButton} onPress={handleSaveAvatar} disabled={savingAvatar}>
             <Text style={styles.saveAvatarText}>{savingAvatar ? 'Salvando...' : 'Salvar Novo Avatar'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 👈 ENVELOPE O CONTAINER COM O ESTADO isEditingName */}
+      {isEditingName && (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Digite seu novo apelido (será seu novo login)"
+            value={novoNome}
+            onChangeText={setNovoNome}
+            autoCapitalize="words"
+          />
+          <TouchableOpacity style={styles.button} onPress={handleMudarNomeELogin}>
+            <Text style={styles.buttonText}>Salvar Novo Nome</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -242,6 +332,33 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  // ... (seus estilos que já existem aí, como container, header, etc)
+
+  inputContainer: {
+    marginTop: 24,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#10b981', // Verde padrão do projeto
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });
