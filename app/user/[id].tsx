@@ -31,14 +31,17 @@ export default function UserProfileScreen() {
 
         // 🔥 1. AJUSTADO: Separando teamA e teamB para encaixar no seu layout
         const matchesSnap = await getDocs(collection(db, 'matches'));
-        const matchesMap: Record<string, { teamA: string; teamB: string; date: string }> = {};
-        
+        const matchesMap: Record<string, any> = {};
+
         matchesSnap.forEach((doc) => {
           const matchData = doc.data();
           matchesMap[doc.id] = {
             teamA: matchData.teamA || 'Time A',
             teamB: matchData.teamB || 'Time B',
-            date: matchData.date || '' 
+            date: matchData.date || '',
+            realScoreA: matchData.realScoreA, // Placar oficial do Admin
+            realScoreB: matchData.realScoreB,
+            status: matchData.status          // Para saber se o jogo terminou 
           };
         });
 
@@ -55,7 +58,10 @@ export default function UserProfileScreen() {
             scoreB: data.scoreB,
             teamA: jogoInfo?.teamA || 'Time A', // Repassando os times separados
             teamB: jogoInfo?.teamB || 'Time B', 
-            matchDate: jogoInfo?.date || ''     // Repassando a data do jogo
+            matchDate: jogoInfo?.date || '',     // Repassando a data do jogo
+            realScoreA: jogoInfo?.realScoreA, // Repassando placar oficial
+            realScoreB: jogoInfo?.realScoreB,
+            status: jogoInfo?.status          // Repassando status oficial
           };
         });
 
@@ -82,6 +88,32 @@ export default function UserProfileScreen() {
     const matchDate = new Date(matchDateString);
     const now = new Date();
     return now.getTime() >= matchDate.getTime();
+  };
+
+  const getScoreBadgeStyle = (pred: any) => {
+    // 🔥 NOVA REGRA: Se não existe placar oficial (Admin ainda não digitou), fica cinza.
+    // Usamos null e undefined para garantir que o número 0 seja aceito como placar válido!
+    if (pred.realScoreA === undefined || pred.realScoreA === null || pred.realScoreB === undefined || pred.realScoreB === null) {
+      return styles.scoreBadgeDefault;
+    }
+
+    const pA = Number(pred.scoreA);
+    const pB = Number(pred.scoreB);
+    const rA = Number(pred.realScoreA);
+    const rB = Number(pred.realScoreB);
+
+    // 🟢 CRAVADA NA MOSCA (Verde)
+    if (pA === rA && pB === rB) {
+      return styles.scoreBadgeExact;
+    }
+    
+    // 🟡 ACERTOU VENCEDOR OU EMPATE (Amarelo)
+    if ((pA > pB && rA > rB) || (pA < pB && rA < rB) || (pA === pB && rA === rB)) {
+      return styles.scoreBadgePartial;
+    }
+    
+    // 🔴 ERROU TUDO (Vermelho)
+    return styles.scoreBadgeWrong;
   };
 
   if (loading) {
@@ -140,7 +172,7 @@ export default function UserProfileScreen() {
                 <Text style={styles.matchTeams}>{pred.teamA} x {pred.teamB}</Text>
                 
                 {jogoJaComecou ? (
-                  <View style={styles.scoreBadge}>
+                  <View style={[styles.scoreBadge, getScoreBadgeStyle(pred)]}>
                     <Text style={styles.scoreText}>{pred.scoreA} - {pred.scoreB}</Text>
                   </View>
                 ) : (
@@ -173,26 +205,19 @@ const styles = StyleSheet.create({
   bold: { fontWeight: 'bold', color: '#0f172a' },
   matchCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   matchTeams: { fontSize: 16, fontWeight: '600', color: '#334155', flex: 1 },
-  scoreBadge: { backgroundColor: '#f8fafc', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' },
+  
+  // Base do Badge (tamanho, padding, formato)
+  scoreBadge: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
   scoreText: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
-  avatar: { 
-    width: 80, 
-    height: 80, 
-    borderRadius: 40, 
-    backgroundColor: '#ffffff', 
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#ffffff'
-  },
-  scoreBadgeLocked: {
-    backgroundColor: '#e2e8f0',
-    borderColor: '#cbd5e1',
-    borderWidth: 1,
-  },
-  scoreTextLocked: {
-    color: '#64748b', 
-    fontSize: 14,
-    fontWeight: '600',
-    fontStyle: 'italic',
-  },
+  
+  // 🔥 ESTILOS DE CORES DOS RESULTADOS
+  scoreBadgeDefault: { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' },           // Neutro (Ainda jogando)
+  scoreBadgeExact: { backgroundColor: '#d1fae5', borderColor: '#10b981' },             // Verde Claro (Cravada)
+  scoreBadgePartial: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },           // Amarelo Claro (Acertou Vencedor)
+  scoreBadgeWrong: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },             // Vermelho Claro (Errou)
+  
+  scoreBadgeLocked: { backgroundColor: '#e2e8f0', borderColor: '#cbd5e1' },
+  scoreTextLocked: { color: '#64748b', fontSize: 14, fontWeight: '600', fontStyle: 'italic' },
+  
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ffffff', marginBottom: 12, borderWidth: 2, borderColor: '#ffffff' },
 });
