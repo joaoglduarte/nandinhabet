@@ -172,6 +172,14 @@ export default function AdminScreen() {
     }
   };
 
+    const lidarComVoltar = () => {
+    if (router.canGoBack()) {
+      router.back(); // Se tem histórico, volta normalmente
+    } else {
+      router.replace('/'); // Se não tem, chuta ele de volta pra Home de forma segura!
+    }
+  };
+
   const calcularPontosJogo = async (matchId: string) => {
     // ... [O restante do código do calcularPontosJogo continua igual]
     const placar = realScores[matchId];
@@ -328,7 +336,7 @@ export default function AdminScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={{marginTop: 40, alignItems: 'center'}} onPress={() => router.back()}>
+      <TouchableOpacity style={{marginTop: 40, alignItems: 'center'}} onPress={lidarComVoltar}>
         <Text style={{color: '#64748b', fontSize: 16}}>Voltar ao App</Text>
       </TouchableOpacity>
     </ScrollView>

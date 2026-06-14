@@ -19,7 +19,7 @@ export default function TournamentScreen() {
   const currentUser = auth.currentUser;
 
   // DATA DE INÍCIO DO TORNEIO - Mude para o horário do primeiro jogo real!
-  const TOURNAMENT_START_DATE = '2026-06-12T16:00:00'; 
+  const TOURNAMENT_START_DATE = '2026-06-14T16:00:00'; 
 
   const isTournamentLocked = () => {
     const startDate = new Date(TOURNAMENT_START_DATE);

@@ -4,79 +4,85 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../firebaseConfig';
 
-
 export default function UserProfileScreen() {
-  // Pega o ID que passamos pela URL (o nome do arquivo é [id].tsx)
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null); // Mantive caso você queira usar no futuro
   const [tournamentBet, setTournamentBet] = useState<any>(null);
   const [predictions, setPredictions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userInfo, setUserInfo] = useState<any>(null);
 
   const getAvatarUrl = (seed?: string) => {
-  if (!seed) return `https://api.dicebear.com/7.x/notionists/png?seed=Felix&backgroundColor=e2e8f0`;
-  return `https://api.dicebear.com/7.x/notionists/png?seed=${seed}&backgroundColor=e2e8f0`;
-};
-
+    if (!seed) return `https://api.dicebear.com/7.x/notionists/png?seed=Felix&backgroundColor=e2e8f0`;
+    return `https://api.dicebear.com/7.x/notionists/png?seed=${seed}&backgroundColor=e2e8f0`;
+  };
 
   useEffect(() => {
-    const fetchUserData = async () => {
+    const carregarPerfilPublico = async () => {
       try {
-        // 1. Busca os dados do usuário (Nome e Pontos)
-        const userDoc = await getDoc(doc(db, 'users', id as string));
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data());
+        setLoading(true);
+
+        const userSnap = await getDoc(doc(db, 'users', id as string)); 
+        if (userSnap.exists()) {
+          setUserInfo(userSnap.data()); 
         }
 
-        // 2. Busca os palpites do torneio (Campeão, Vice, etc)
-        const tourneyDoc = await getDoc(doc(db, 'tournament_bets', id as string));
-        if (tourneyDoc.exists()) {
-          setTournamentBet(tourneyDoc.data());
-        }
-
-        // 3. Busca a tabela de jogos para sabermos quem está jogando
+        // 🔥 1. AJUSTADO: Separando teamA e teamB para encaixar no seu layout
         const matchesSnap = await getDocs(collection(db, 'matches'));
-        const matchesDict: Record<string, any> = {};
-        matchesSnap.forEach((mDoc) => {
-          matchesDict[mDoc.id] = mDoc.data();
-        });
-
-        // 4. Busca os palpites de jogos desse usuário
-        const predQ = query(collection(db, 'predictions'), where('userId', '==', id));
-        const predSnap = await getDocs(predQ);
+        const matchesMap: Record<string, { teamA: string; teamB: string; date: string }> = {};
         
-        const userPredictions: any[] = [];
-        predSnap.forEach((pDoc) => {
-          const palpite = pDoc.data();
-          const matchInfo = matchesDict[palpite.matchId];
-          
-          if (matchInfo) {
-            userPredictions.push({
-              id: pDoc.id,
-              teamA: matchInfo.teamA,
-              teamB: matchInfo.teamB,
-              scoreA: palpite.scoreA,
-              scoreB: palpite.scoreB,
-              matchDate: matchInfo.date,
-            });
-          }
+        matchesSnap.forEach((doc) => {
+          const matchData = doc.data();
+          matchesMap[doc.id] = {
+            teamA: matchData.teamA || 'Time A',
+            teamB: matchData.teamB || 'Time B',
+            date: matchData.date || '' 
+          };
         });
 
-        // Ordena os palpites pela data do jogo
-        userPredictions.sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
-        setPredictions(userPredictions);
+        const q = query(collection(db, 'predictions'), where('userId', '==', id));
+        const predictionsSnap = await getDocs(q);
+        
+        const listaPalpites = predictionsSnap.docs.map(doc => {
+          const data = doc.data();
+          const jogoInfo = matchesMap[data.matchId];
+
+          return {
+            id: doc.id,
+            scoreA: data.scoreA,
+            scoreB: data.scoreB,
+            teamA: jogoInfo?.teamA || 'Time A', // Repassando os times separados
+            teamB: jogoInfo?.teamB || 'Time B', 
+            matchDate: jogoInfo?.date || ''     // Repassando a data do jogo
+          };
+        });
+
+        setPredictions(listaPalpites);
+
+        // 🔥 EXTRA: Adicionada a busca do torneio para preencher a sua caixinha na tela
+        const tBetDoc = await getDoc(doc(db, 'tournament_bets', id as string));
+        if (tBetDoc.exists()) {
+          setTournamentBet(tBetDoc.data());
+        }
 
       } catch (error) {
-        console.error("Erro ao buscar dados do usuário:", error);
+        console.log("Erro ao carregar perfil público:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUserData();
+    if (id) carregarPerfilPublico();
   }, [id]);
+
+  const isMatchLocked = (matchDateString: string) => {
+    if (!matchDateString) return false;
+    const matchDate = new Date(matchDateString);
+    const now = new Date();
+    return now.getTime() >= matchDate.getTime();
+  };
 
   if (loading) {
     return (
@@ -94,17 +100,15 @@ export default function UserProfileScreen() {
           <Text style={styles.backButtonText}>← Voltar</Text>
         </TouchableOpacity>
 
-        {/* FOTO DO PERFIL IGUALZINHA AO DO RANKING */}
-        {userProfile && (
-          <Image 
-            source={{ uri: getAvatarUrl(userProfile.avatar || userProfile.nickname) }} 
-            style={styles.avatar} 
-          />
-        )}
+        {/* Usando userInfo em vez de userProfile, já que foi ele que você carregou no useEffect */}
+        <Image 
+          source={{ uri: getAvatarUrl(userInfo?.avatar || userInfo?.nickname) }} 
+          style={styles.avatar} 
+        />
 
-        <Text style={styles.nickname}>{userProfile?.nickname || 'Jogador'}</Text>
-        <Text style={styles.points}>{userProfile?.totalPoints || 0} pts</Text>
-        <Text style={styles.exactMatches}>{userProfile?.exactMatches || 0} cravadas na mosca</Text>
+        <Text style={styles.nickname}>{userInfo?.nickname || 'Jogador'}</Text>
+        <Text style={styles.points}>{userInfo?.totalPoints || 0} pts</Text>
+        <Text style={styles.exactMatches}>{userInfo?.exactMatches || 0} cravadas na mosca</Text>
       </View>
 
       {/* PALPITES DO TORNEIO (Longo Prazo) */}
@@ -128,14 +132,25 @@ export default function UserProfileScreen() {
         {predictions.length === 0 ? (
           <Text style={styles.emptyText}>Nenhum palpite registrado para as partidas.</Text>
         ) : (
-          predictions.map((pred) => (
-            <View key={pred.id} style={styles.matchCard}>
-              <Text style={styles.matchTeams}>{pred.teamA} x {pred.teamB}</Text>
-              <View style={styles.scoreBadge}>
-                <Text style={styles.scoreText}>{pred.scoreA} - {pred.scoreB}</Text>
+          predictions.map((pred) => {
+            const jogoJaComecou = isMatchLocked(pred.matchDate);
+
+            return (
+              <View key={pred.id} style={styles.matchCard}>
+                <Text style={styles.matchTeams}>{pred.teamA} x {pred.teamB}</Text>
+                
+                {jogoJaComecou ? (
+                  <View style={styles.scoreBadge}>
+                    <Text style={styles.scoreText}>{pred.scoreA} - {pred.scoreB}</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.scoreBadge, styles.scoreBadgeLocked]}>
+                    <Text style={styles.scoreTextLocked}>🔒 Oculto</Text>
+                  </View>
+                )}
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
     </ScrollView>
@@ -164,9 +179,20 @@ const styles = StyleSheet.create({
     width: 80, 
     height: 80, 
     borderRadius: 40, 
-    backgroundColor: '#ffffff', // Fundo branco caso o ícone seja transparente
+    backgroundColor: '#ffffff', 
     marginBottom: 12,
     borderWidth: 2,
     borderColor: '#ffffff'
+  },
+  scoreBadgeLocked: {
+    backgroundColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+  },
+  scoreTextLocked: {
+    color: '#64748b', 
+    fontSize: 14,
+    fontWeight: '600',
+    fontStyle: 'italic',
   },
 });
