@@ -147,20 +147,31 @@ export default function AdminScreen() {
           teamA: jogo.teamA,
           teamB: jogo.teamB,
           date: jogo.date,
-          status: 'scheduled'
+          // O merge: true protege os jogos que já têm placar, então o 'scheduled' 
+          // não vai sobrescrever o que já acabou.
+          status: 'scheduled' 
         }, { merge: true });
       });
 
       await batch.commit();
       console.log("Mágica feita! Jogos injetados.");
       
-      // Um alert simples funciona na Web
       Alert.alert('Sucesso!', 'Jogos adicionados ao Firebase!');
       
-      // Recarrega os jogos na tela do Admin
-      const q = query(collection(db, 'matches'), where('status', '!=', 'finished'));
-      const snapshot = await getDocs(q);
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      // 🔥 A CORREÇÃO ENTRA AQUI: Carrega os jogos ignorando o status e olhando pro placar!
+      const snapshot = await getDocs(collection(db, 'matches'));
+      const list: any[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Só joga na lista do Admin se o placar oficial AINDA NÃO EXISTIR
+        if (data.realScoreA === undefined || data.realScoreA === null) {
+          list.push({ id: doc.id, ...data });
+        }
+      });
+
+      // Ordena por data
       list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       setMatches(list);
 

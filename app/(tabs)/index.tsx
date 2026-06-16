@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { auth, db } from '../../firebaseConfig';
@@ -10,6 +10,9 @@ interface Match {
   teamA: string;
   teamB: string;
   date: string;
+  realScoreA?: number; 
+  realScoreB?: number;
+  status?: string;
 }
 
 export default function MatchesScreen() {
@@ -19,7 +22,7 @@ export default function MatchesScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // 🔥 NOVOS ESTADOS PARA O MURAL DE TRANSPARÊNCIA (MODAL)
+  // NOVOS ESTADOS PARA O MURAL DE TRANSPARÊNCIA (MODAL)
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [outrosPalpites, setOutrosPalpites] = useState<any[]>([]);
@@ -114,10 +117,17 @@ export default function MatchesScreen() {
     verificarPalpiteFinal();
   }, []); 
 
+ // Adicione um estado para guardar o índice do próximo jogo no topo do arquivo:
+  const [initialIndex, setInitialIndex] = useState(0);
+  const flatListRef = useRef<any>(null); // Ref para controlar o scroll
+
   useEffect(() => {
+    setLoading(true);
     const matchesRef = collection(db, 'matches');
+    
     const unsubscribeMatches = onSnapshot(matchesRef, (snapshot) => {
-      const matchesList: Match[] = [];
+      const matchesList: any[] = [];
+
       snapshot.forEach((doc) => {
         const data = doc.data();
         matchesList.push({
@@ -125,33 +135,77 @@ export default function MatchesScreen() {
           teamA: data.teamA || 'Time A',
           teamB: data.teamB || 'Time B',
           date: data.date || '',
+          realScoreA: data.realScoreA, 
+          realScoreB: data.realScoreB,
         });
       });
-      setMatches(matchesList);
-      setLoading(false);
-    }, (error) => {
-      console.error(error);
-      setLoading(false);
+
+      // 🛡️ 1. ORDENAÇÃO SEGURA: Evita que datas nulas ou inválidas quebrem o Sort
+    matchesList.sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      if (isNaN(timeA)) return 1;  // Joga lixo/erros para o fim da lista
+      if (isNaN(timeB)) return -1;
+      return timeA - timeB;
     });
 
-    if (currentUser) {
-      const predictionsRef = collection(db, 'predictions');
-      const q = query(predictionsRef, where('userId', '==', currentUser.uid));
-      getDocs(q).then((snapshot) => {
-        const userPredictions: Record<string, { scoreA: string; scoreB: string }> = {};
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          userPredictions[data.matchId] = {
-            scoreA: String(data.scoreA),
-            scoreB: String(data.scoreB),
-          };
-        });
-        setPredictions(userPredictions);
-      });
+    // 🛡️ 2. BUSCA DO PRÓXIMO JOGO BLINDADA
+    const agora = new Date().getTime();
+    const indexProximoJogo = matchesList.findIndex((jogo) => {
+      if (!jogo.date) return false;
+      const jogoTime = new Date(jogo.date).getTime();
+      // Só aceita se for uma data válida E for maior ou igual ao segundo atual
+      return !isNaN(jogoTime) && jogoTime >= agora;
+    });
+
+    setMatches(matchesList);
+    
+    // 🛡️ 3. INTELIGÊNCIA DE FALLBACK
+    if (indexProximoJogo >= 0) {
+      setInitialIndex(indexProximoJogo);
+    } else if (matchesList.length > 0) {
+      // Se a Copa acabou (ou todos os jogos passaram), foca no ÚLTIMO jogo da lista
+      setInitialIndex(matchesList.length - 1);
     }
 
-    return () => unsubscribeMatches();
-  }, [currentUser]);
+    setLoading(false);
+    
+  }, (error) => {
+    console.error(error);
+    setLoading(false);
+  });
+
+  if (currentUser) {
+    const predictionsRef = collection(db, 'predictions');
+    const q = query(predictionsRef, where('userId', '==', currentUser.uid));
+    getDocs(q).then((snapshot) => {
+      const userPredictions: Record<string, { scoreA: string; scoreB: string }> = {};
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        userPredictions[data.matchId] = {
+          scoreA: String(data.scoreA),
+          scoreB: String(data.scoreB),
+        };
+      });
+      setPredictions(userPredictions);
+    });
+  }
+
+  return () => unsubscribeMatches();
+}, [currentUser]);
+
+useEffect(() => {
+  if (matches.length > 0 && initialIndex > 0) {
+    // Um pequeno delay de 100ms garante que o layout da tela já foi desenhado antes do scroll rodar
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: initialIndex,
+        animated: false, // false para não dar aquele tranco visual de rolagem ao abrir o app
+        viewPosition: 0  // 0 significa alinhar o item exatamente no topo da tela!
+      });
+    }, 100);
+  }
+}, [matches, initialIndex]);
 
   const handleScoreChange = (matchId: string, team: 'scoreA' | 'scoreB', value: string) => {
     setPredictions((prev) => ({
@@ -189,6 +243,31 @@ export default function MatchesScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const getScoreBadgeStyle = (item: any) => {
+    // ATENÇÃO: Substitua "selectedMatch" pelo nome da variável de estado 
+    // que você usa para guardar qual jogo está aberto no Modal agora!
+    // (Pode ser "jogoSelecionado", "currentMatch", etc)
+    const jogoAberto = selectedMatch; 
+
+    if (!jogoAberto || jogoAberto.realScoreA === undefined || jogoAberto.realScoreA === null) {
+      return styles.scoreBadgeDefault; // Cinza se não acabou
+    }
+
+    const pA = Number(item.scoreA);
+    const pB = Number(item.scoreB);
+    const rA = Number(jogoAberto.realScoreA);
+    const rB = Number(jogoAberto.realScoreB);
+
+    // 🟢 CRAVADA (Verde)
+    if (pA === rA && pB === rB) return styles.scoreBadgeExact;
+    
+    // 🟡 ACERTOU VENCEDOR/EMPATE (Amarelo)
+    if ((pA > pB && rA > rB) || (pA < pB && rA < rB) || (pA === pB && rA === rB)) return styles.scoreBadgePartial;
+    
+    // 🔴 ERROU (Vermelho)
+    return styles.scoreBadgeWrong;
   };
 
   const renderMatchCard = ({ item }: { item: Match }) => {
@@ -261,11 +340,15 @@ export default function MatchesScreen() {
   return (
     <View style={styles.container}>
       <FlatList 
+        ref={flatListRef}
         data={matches}
         keyExtractor={(item) => item.id}
         renderItem={renderMatchCard}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        getItemLayout={(data, index) => (
+        { length: 228, offset: 228 * index, index }
+        )}
       />
 
       {/* 🔥 NOVO: O Modal Flutuante do Mural de Transparência */}
@@ -278,9 +361,20 @@ export default function MatchesScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mural de Palpites</Text>
-              <Text style={styles.modalSubtitle}>{selectedMatch?.teamA} x {selectedMatch?.teamB}</Text>
-            </View>
+            <Text style={styles.modalTitle}>Mural de Palpites</Text>
+            <Text style={styles.modalSubtitle}>{selectedMatch?.teamA} x {selectedMatch?.teamB}</Text>
+            
+            {/* 🔥 PLACAR OFICIAL CENTRALIZADO NO TOPO DO MODAL */}
+            {selectedMatch?.realScoreA !== undefined && selectedMatch?.realScoreA !== null && (
+              <View style={styles.officialModalBadge}>
+                <Text style={styles.officialModalText}>
+                  Placar Oficial: {selectedMatch.realScoreA} x {selectedMatch.realScoreB}
+                </Text>
+              </View>
+            )}
+          </View>
+
+            {/* A caixinha solta que dava erro foi REMOVIDA daqui! */}
 
             {loadingModal ? (
               <ActivityIndicator size="large" color="#10b981" style={{ marginVertical: 40 }} />
@@ -293,7 +387,11 @@ export default function MatchesScreen() {
                 renderItem={({ item }) => (
                   <View style={styles.palpiteRow}>
                     <Text style={styles.playerName}>{item.userName}</Text>
-                    <Text style={styles.playerScore}>{item.scoreA} x {item.scoreB}</Text>
+                    
+                    {/* 🔥 A CAIXINHA COLORIDA ENTRA AQUI! Substituindo o playerScore antigo */}
+                    <View style={[styles.scoreBadge, getScoreBadgeStyle(item)]}>
+                      <Text style={styles.scoreText}>{item.scoreA} - {item.scoreB}</Text>
+                    </View>
                   </View>
                 )}
               />
@@ -335,9 +433,40 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
   modalSubtitle: { fontSize: 16, color: '#64748b', marginTop: 4 },
   palpiteRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#ffffff', width: '100%', padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  playerName: { fontSize: 16, color: '#334155', fontWeight: 'bold' },
+  playerName: { fontSize: 16, color: '#334155', fontWeight: 'bold', textTransform: 'capitalize' },
   playerScore: { fontSize: 18, fontWeight: '900', color: '#10b981' },
   emptyModalText: { textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', marginVertical: 20 },
   closeModalButton: { marginTop: 16, backgroundColor: '#ef4444', width: '100%', padding: 16, borderRadius: 12, alignItems: 'center' },
-  closeModalText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }
+  closeModalText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  scoreBadge: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 8, 
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  scoreText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#0f172a' 
+  },
+  
+  // As Cores:
+  scoreBadgeDefault: { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' },           // Cinza (Em andamento)
+  scoreBadgeExact: { backgroundColor: '#d1fae5', borderColor: '#10b981' },             // Verde (Cravada)
+  scoreBadgePartial: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },           // Amarelo (Vencedor/Empate)
+  scoreBadgeWrong: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },             // Vermelho (Errou)
+  officialModalBadge: {
+    backgroundColor: '#1e293b', // Fundo escuro para destacar bem
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  officialModalText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
 });
