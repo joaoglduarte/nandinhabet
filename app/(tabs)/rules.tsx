@@ -11,7 +11,7 @@ export default function RulesScreen() {
 
       {/* REGRAS DE JOGOS COMUNS */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>⚽ Partidas (Fase de Grupos e Mata-Mata)</Text>
+        <Text style={styles.sectionTitle}>⚽ Partidas (Fase de Grupos)</Text>
         
         <View style={styles.ruleCard}>
           <View style={styles.ruleHeader}>
@@ -34,9 +34,58 @@ export default function RulesScreen() {
             <Text style={styles.example}>Ex: Apostou 1x0, o jogo terminou 3x0 (acertou o vencedor). {'\n'}Apostou 1x1, o jogo terminou 0x0 (acertou o empate).</Text>
           </Text>
         </View>
+
+        
+
+        <Text style={styles.sectionTitle}>🔥 Fase Mata-Mata (Novo Peso!)</Text>
+
+        <View style={styles.ruleCard}>
+          <View style={styles.ruleHeader}>
+            <Text style={styles.rulePoints}>+7 pts</Text>
+            <Text style={styles.ruleName}>Acerto na mosca</Text>
+          </View>
+          <Text style={styles.ruleDesc}>
+            Acertou o placar exato. Se houver disputa de pênaltis, tem que cravar o time vencedor também! {'\n'}
+            <Text style={styles.example}>Ex: Apostou 3x0, o jogo terminou 3x0. {'\n'}</Text>
+          </Text>
+        </View>
+
+        <View style={styles.ruleCard}>
+          <View style={styles.ruleHeader}>
+            <Text style={styles.rulePoints}>+4 pts</Text>
+            <Text style={styles.ruleName}>Acerto de Tendência ou Quase</Text>
+          </View>
+          <Text style={styles.ruleDesc}>
+            Previu a tendência. Para empates: Você previu o empate, mas errou os gols no tempo normal e também errou quem passou nos pênaltis. Pelo menos a leitura de jogo foi boa! {'\n'}
+            <Text style={styles.example}>Ex: Apostou 1x0, o jogo terminou 3x0 (acertou o vencedor). {'\n'}Apostou 1x1, o jogo terminou 0x0 (acertou o empate).</Text>
+          </Text>
+        </View>
+
+        <View style={styles.ruleCard}>
+          <View style={styles.ruleHeader}>
+            <Text style={styles.rulePoints}>+2 pts</Text>
+            <Text style={styles.ruleName}>Acerto de Consolação</Text>
+          </View>
+          <Text style={styles.ruleDesc}>
+            Você previu o empate, mas errou os gols no tempo normal e também errou quem passou nos pênaltis. Pelo menos a leitura de jogo foi boa! {'\n'}
+            <Text style={styles.example}>Ex: Apostou 1x1, e que o time A ganharia. O jogo terminou 3x3, e o time B venceu (Prêmio de consolação).</Text>
+          </Text>
+        </View>
+          
+          <Text style={styles.rulePoints}>
+            <Text style={{fontWeight: 'bold', color: '#10b981'}}>🟩 7 Pontos (Cravada Máxima):</Text>
+          </Text>
+          
+          <Text style={styles.rulePoints}>
+            <Text style={{fontWeight: 'bold', color: '#fbbf24'}}>🟨 4 Pontos (Tendência ou Quase):</Text>
+          </Text>
+          
+          <Text style={styles.rulePoints}>
+            <Text style={{fontWeight: 'bold', color: '#f97316'}}>🟧 2 Pontos (Consolação)</Text>
+          </Text>
+        </View>
         
         <Text style={styles.note}>⚠️ Nota: Os palpites podem ser alterados até o minuto exato em que a partida começa!</Text>
-      </View>
 
       {/* REGRAS DE PALPITES FINAIS */}
       <View style={styles.section}>

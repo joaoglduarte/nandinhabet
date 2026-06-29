@@ -13,12 +13,14 @@ interface Match {
   realScoreA?: number; 
   realScoreB?: number;
   status?: string;
+  isKnockout?: boolean; 
+  realPenaltyWinner?: 'A' | 'B';
 }
 
 export default function MatchesScreen() {
   const router = useRouter();
   const [matches, setMatches] = useState<Match[]>([]);
-  const [predictions, setPredictions] = useState<Record<string, { scoreA: string; scoreB: string }>>({});
+  const [predictions, setPredictions] = useState<Record<string, { scoreA: string; scoreB: string; penaltyWinner?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -52,46 +54,52 @@ export default function MatchesScreen() {
   };
 
   // 🔥 NOVA FUNÇÃO: Busca os palpites dos outros apenas quando o Modal abre
-  const handleAbrirMural = async (match: Match) => {
-    setSelectedMatch(match);
-    setModalVisible(true);
-    setLoadingModal(true);
+  // Garanta que getDoc e doc estão importados do 'firebase/firestore'
 
-    try {
-      // 1. Busca os nomes dos usuários (usamos um cache para não buscar toda hora)
-      let currentUsers = usersCache;
-      if (Object.keys(currentUsers).length === 0) {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const tempCache: Record<string, string> = {};
-        usersSnap.forEach(doc => { tempCache[doc.id] = doc.data().nickname || 'Jogador'; });
-        setUsersCache(tempCache);
-        currentUsers = tempCache;
+
+const handleAbrirMural = async (match: any) => {
+  setModalVisible(true);
+  setSelectedMatch(match);
+  setLoadingModal(true);
+
+  try {
+    const q = query(collection(db, 'predictions'), where('matchId', '==', match.id));
+    const snapshot = await getDocs(q);
+    
+    // 🔥 Usamos Promise.all porque agora precisamos fazer buscas "extras" para os palpites antigos
+    const palpitesDaGalera = await Promise.all(snapshot.docs.map(async (predictionDoc) => {
+      const data = predictionDoc.data();
+      
+      let nomeParaExibir = data.userName;
+
+      // Se for um palpite ANTIGO que não tem o 'userName' salvo na raiz...
+      if (!nomeParaExibir && data.userId) {
+        // ...vamos lá na coleção de usuários buscar o nickname!
+        const userRef = doc(db, 'users', data.userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists() && userSnap.data().nickname) {
+          nomeParaExibir = userSnap.data().nickname;
+        } else {
+          nomeParaExibir = 'Usuário'; // Fallback final
+        }
       }
 
-      // 2. Busca os palpites específicos deste jogo
-      const q = query(collection(db, 'predictions'), where('matchId', '==', match.id));
-      const snap = await getDocs(q);
-      
-      const lista = snap.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          scoreA: data.scoreA,
-          scoreB: data.scoreB,
-          userName: currentUsers[data.userId] || 'Invisível'
-        };
-      });
+      return {
+        id: predictionDoc.id,
+        userName: nomeParaExibir || 'Usuário',
+        scoreA: data.scoreA,
+        scoreB: data.scoreB,
+        penaltyWinner: data.penaltyWinner, 
+      };
+    }));
 
-      // Ordena alfabeticamente pelo nome para ficar organizado
-      lista.sort((a, b) => a.userName.localeCompare(b.userName));
-      setOutrosPalpites(lista);
-
-    } catch (error) {
-      console.log("Erro ao buscar mural:", error);
-    } finally {
-      setLoadingModal(false);
-    }
-  };
+    setOutrosPalpites(palpitesDaGalera);
+  } catch (error) {
+    console.error("Erro ao buscar palpites:", error);
+  } finally {
+    setLoadingModal(false);
+  }
+};
 
   useEffect(() => {
     const verificarPalpiteFinal = async () => {
@@ -137,6 +145,8 @@ export default function MatchesScreen() {
           date: data.date || '',
           realScoreA: data.realScoreA, 
           realScoreB: data.realScoreB,
+          isKnockout: data.isKnockout,
+          realPenaltyWinner: data.realPenaltyWinner,
         });
       });
 
@@ -207,27 +217,57 @@ useEffect(() => {
   }
 }, [matches, initialIndex]);
 
-  const handleScoreChange = (matchId: string, team: 'scoreA' | 'scoreB', value: string) => {
+  const handleScoreChange = (matchId: string, team: 'scoreA' | 'scoreB' | 'penaltyWinner', value: string) => {
     setPredictions((prev) => ({
       ...prev,
       [matchId]: { ...prev[matchId], [team]: value },
     }));
   };
 
-  const handleSavePrediction = async (matchId: string, scoreA: string, scoreB: string) => {
+  const handleSavePrediction = async (matchId: string, scoreA: string, scoreB: string, penaltyWinner?: string) => {
     if (!auth.currentUser) return;
+    
+    // 🔥 TRAVA DE SEGURANÇA: Exige os pênaltis se for empate no mata-mata
+    // Nota: "matches" aqui deve ser o nome da sua variável de estado que guarda a lista de jogos!
+    const matchCorrente = matches.find(m => m.id === matchId); 
+    if (matchCorrente?.isKnockout && scoreA !== '' && scoreA === scoreB && !penaltyWinner) {
+      if (Platform.OS === 'web') window.alert('Em caso de empate, escolha quem vence nos pênaltis!');
+      else Alert.alert('Atenção', 'Em caso de empate, escolha quem vence nos pênaltis!');
+      return;
+    }
+
     setSaving(true);
     try {
+
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      
+      // Se ele achar o documento, pega o 'nickname'. Se não, usa 'Jogador' de backup.
+      const nomeReal = userSnap.exists() ? userSnap.data().nickname : 'Jogador';
+
       const predictionId = `${auth.currentUser.uid}_${matchId}`;
       const predictionRef = doc(db, 'predictions', predictionId);
 
-      await setDoc(predictionRef, {
+      // 1. Monta o pacote base de dados
+      const dadosDoPalpite: any = {
         userId: auth.currentUser.uid,
+        userName: nomeReal,
         matchId: matchId,
         scoreA: Number(scoreA), 
         scoreB: Number(scoreB), 
         updatedAt: new Date(),
-      }, { merge: true });
+      };
+
+      // 2. 🔥 INSERE O PÊNALTI NO PACOTE ANTES DE ENVIAR
+      if (penaltyWinner) {
+        dadosDoPalpite.penaltyWinner = penaltyWinner;
+      } else {
+        // Se a pessoa mudar o placar (ex: de 1x1 pra 2x1), salvamos nulo para limpar pênaltis velhos
+        dadosDoPalpite.penaltyWinner = null; 
+      }
+
+      // 3. Salva no banco de verdade!
+      await setDoc(predictionRef, dadosDoPalpite, { merge: true });
 
       Toast.show({
         type: 'success',
@@ -246,29 +286,50 @@ useEffect(() => {
   };
 
   const getScoreBadgeStyle = (item: any) => {
-    // ATENÇÃO: Substitua "selectedMatch" pelo nome da variável de estado 
-    // que você usa para guardar qual jogo está aberto no Modal agora!
-    // (Pode ser "jogoSelecionado", "currentMatch", etc)
-    const jogoAberto = selectedMatch; 
+  const jogoAberto = selectedMatch; 
 
-    if (!jogoAberto || jogoAberto.realScoreA === undefined || jogoAberto.realScoreA === null) {
-      return styles.scoreBadgeDefault; // Cinza se não acabou
+  // 1. Jogo ainda não finalizado (Cinza)
+  if (!jogoAberto || jogoAberto.realScoreA === undefined || jogoAberto.realScoreA === null) {
+    return styles.scoreBadgeDefault; 
+  }
+
+  const pA = Number(item.scoreA);
+  const pB = Number(item.scoreB);
+  const pPenal = item.penaltyWinner;
+  
+  const rA = Number(jogoAberto.realScoreA);
+  const rB = Number(jogoAberto.realScoreB);
+  const rPenal = jogoAberto.realPenaltyWinner;
+  const isMataMata = jogoAberto.isKnockout;
+
+  // 🟢 7 ou 5 Pontos: CRAVADA NA MOSCA
+  // No mata-mata, precisa acertar o pênalti se foi empate
+  const acertouPlacar = (pA === rA && pB === rB);
+  if (acertouPlacar) {
+    if (isMataMata && rPenal && pPenal !== rPenal) {
+      // Cravou placar mas errou pênalti (vira 4 pontos - usa Amarelo)
+      return styles.scoreBadgePartial; 
     }
+    return styles.scoreBadgeExact;
+  }
 
-    const pA = Number(item.scoreA);
-    const pB = Number(item.scoreB);
-    const rA = Number(jogoAberto.realScoreA);
-    const rB = Number(jogoAberto.realScoreB);
-
-    // 🟢 CRAVADA (Verde)
-    if (pA === rA && pB === rB) return styles.scoreBadgeExact;
-    
-    // 🟡 ACERTOU VENCEDOR/EMPATE (Amarelo)
-    if ((pA > pB && rA > rB) || (pA < pB && rA < rB) || (pA === pB && rA === rB)) return styles.scoreBadgePartial;
-    
-    // 🔴 ERROU (Vermelho)
-    return styles.scoreBadgeWrong;
-  };
+  // 🟡 4 ou 2 Pontos: TENDÊNCIA
+  if ((pA > pB && rA > rB) || (pA < pB && rA < rB)) return styles.scoreBadgePartial;
+  
+  // Caso de Empate
+  if (pA === pB && rA === rB) {
+    if (isMataMata) {
+      if (pPenal === rPenal) return styles.scoreBadgePartial; // Acertou empate + pênalti
+      
+      // 🔥 AQUI ENTRA O LARANJA: Errou os gols e errou o pênalti, mas previu o empate
+      return styles.scoreBadgeConsolation; 
+    }
+    return styles.scoreBadgePartial; // Fase de grupos
+  }
+  
+  // 🔴 0 Pontos: ERROU
+  return styles.scoreBadgeWrong;
+};
 
   const renderMatchCard = ({ item }: { item: Match }) => {
     const locked = isMatchLocked(item.date); 
@@ -309,9 +370,47 @@ useEffect(() => {
           </View>
         </View>
 
+        {/* 🔥 NOVO: SELETOR DE PÊNALTIS (Aparece só no mata-mata em caso de empate) */}
+        {item.isKnockout && 
+         predictions[item.id]?.scoreA !== '' && 
+         predictions[item.id]?.scoreA !== undefined && 
+         predictions[item.id]?.scoreA === predictions[item.id]?.scoreB && (
+          <View style={styles.penaltyContainer}>
+            <Text style={styles.penaltyTitle}>Quem avança nos pênaltis?</Text>
+            <View style={styles.penaltyButtons}>
+              
+              {/* Botão do Time A */}
+              <TouchableOpacity 
+                style={[
+                  styles.penaltyBtn, 
+                  predictions[item.id]?.penaltyWinner === 'A' && styles.penaltyBtnActive
+                ]}
+                // Usa o mesmo handleScoreChange para salvar a escolha 'A' ou 'B'
+                onPress={() => handleScoreChange(item.id, 'penaltyWinner', 'A')}
+                disabled={locked} // Bloqueia se o jogo já começou
+              >
+                <Text style={styles.penaltyBtnText}>{item.teamA}</Text>
+              </TouchableOpacity>
+
+              {/* Botão do Time B */}
+              <TouchableOpacity 
+                style={[
+                  styles.penaltyBtn, 
+                  predictions[item.id]?.penaltyWinner === 'B' && styles.penaltyBtnActive
+                ]}
+                onPress={() => handleScoreChange(item.id, 'penaltyWinner', 'B')}
+                disabled={locked}
+              >
+                <Text style={styles.penaltyBtnText}>{item.teamB}</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity 
           style={[styles.saveButton, locked ? styles.saveButtonLocked : null]} 
-          onPress={() => handleSavePrediction(item.id, predictions[item.id]?.scoreA || '', predictions[item.id]?.scoreB || '')}
+          onPress={() => handleSavePrediction(item.id, predictions[item.id]?.scoreA || '', predictions[item.id]?.scoreB || '', predictions[item.id]?.penaltyWinner || '')}
           disabled={saving || locked}
         >
           <Text style={styles.saveButtonText}>
@@ -366,10 +465,19 @@ useEffect(() => {
             
             {/* 🔥 PLACAR OFICIAL CENTRALIZADO NO TOPO DO MODAL */}
             {selectedMatch?.realScoreA !== undefined && selectedMatch?.realScoreA !== null && (
-              <View style={styles.officialModalBadge}>
-                <Text style={styles.officialModalText}>
-                  Placar Oficial: {selectedMatch.realScoreA} x {selectedMatch.realScoreB}
-                </Text>
+              <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                <View style={styles.officialModalBadge}>
+                  <Text style={styles.officialModalText}>
+                    Placar Oficial: {selectedMatch.realScoreA} x {selectedMatch.realScoreB}
+                  </Text>
+                </View>
+                
+                {/* 🔥 NOVO: AVISA A GALERA QUEM VENCEU NOS PÊNALTIS! */}
+                {selectedMatch.realPenaltyWinner && (
+                  <Text style={{ color: '#059669', fontWeight: 'bold', fontSize: 14, marginTop: 8 }}>
+                    🏆 {selectedMatch.realPenaltyWinner === 'A' ? selectedMatch.teamA : selectedMatch.teamB} venceu nos pênaltis
+                  </Text>
+                )}
               </View>
             )}
           </View>
@@ -380,21 +488,40 @@ useEffect(() => {
               <ActivityIndicator size="large" color="#10b981" style={{ marginVertical: 40 }} />
             ) : (
               <FlatList
-                data={outrosPalpites}
-                keyExtractor={(item) => item.id}
-                style={{ width: '100%' }}
-                ListEmptyComponent={<Text style={styles.emptyModalText}>Ninguém palpitou nesse jogo.</Text>}
-                renderItem={({ item }) => (
-                  <View style={styles.palpiteRow}>
-                    <Text style={styles.playerName}>{item.userName}</Text>
-                    
-                    {/* 🔥 A CAIXINHA COLORIDA ENTRA AQUI! Substituindo o playerScore antigo */}
-                    <View style={[styles.scoreBadge, getScoreBadgeStyle(item)]}>
-                      <Text style={styles.scoreText}>{item.scoreA} - {item.scoreB}</Text>
-                    </View>
-                  </View>
-                )}
-              />
+          data={outrosPalpites}
+          keyExtractor={(item) => item.id}
+          style={{ width: '100%' }}
+          ListEmptyComponent={<Text style={styles.emptyModalText}>Ninguém palpitou nesse jogo.</Text>}
+          renderItem={({ item }) => {
+            
+            // 🔥 O ESPIÃO: Olhe o terminal do Expo! 
+            // Se aparecer "penaltyWinner: 'A'", o dado chegou perfeito.
+            //console.log("Desenhando palpite no Mural:", item.userName, " | Tem pênalti?", item.penaltyWinner);
+
+            const isEmpate = Number(item.scoreA) === Number(item.scoreB);
+
+            return (
+              // 🔥 A SOLUÇÃO VISUAL: Forçamos o minHeight e o padding para a caixa "crescer"
+              <View style={[styles.palpiteRow, { minHeight: 70, paddingVertical: 10, alignItems: 'center' }]}>
+                
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                  <Text style={styles.playerName}>{item.userName}</Text>
+                  
+                  {isEmpate && item.penaltyWinner && (
+                    <Text style={{ fontSize: 13, color: '#252525', marginTop: 4, fontWeight: 'bold' }}>
+                      ↳ Pênaltis: {item.penaltyWinner === 'A' ? selectedMatch?.teamA : selectedMatch?.teamB}
+                    </Text>
+                  )}
+                </View>
+                
+                <View style={[styles.scoreBadge, getScoreBadgeStyle(item)]}>
+                  <Text style={styles.scoreText}>{item.scoreA} - {item.scoreB}</Text>
+                </View>
+
+              </View>
+            );
+          }}
+        />
             )}
 
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setModalVisible(false)}>
@@ -456,6 +583,7 @@ const styles = StyleSheet.create({
   scoreBadgeDefault: { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' },           // Cinza (Em andamento)
   scoreBadgeExact: { backgroundColor: '#d1fae5', borderColor: '#10b981' },             // Verde (Cravada)
   scoreBadgePartial: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },           // Amarelo (Vencedor/Empate)
+  scoreBadgeConsolation: { backgroundColor: '#fad9c1', borderColor: '#f97316' },     // Laranja (Consolação)
   scoreBadgeWrong: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },             // Vermelho (Errou)
   officialModalBadge: {
     backgroundColor: '#1e293b', // Fundo escuro para destacar bem
@@ -468,5 +596,45 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  penaltyContainer: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  penaltyTitle: {
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  penaltyButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  penaltyBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  penaltyBtnActive: {
+    backgroundColor: '#10b981', // Verde confirmando a seleção
+    borderColor: '#059669',
+  },
+  penaltyBtnText: {
+    fontWeight: 'bold',
+    color: '#334155',
+    fontSize: 12,
   },
 });

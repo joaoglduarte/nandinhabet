@@ -41,6 +41,8 @@ export default function UserProfileScreen() {
             date: matchData.date || '',
             realScoreA: matchData.realScoreA, // Placar oficial do Admin
             realScoreB: matchData.realScoreB,
+            realPenaltyWinner: matchData.realPenaltyWinner || null, // 🔥 NOVO
+            isKnockout: matchData.isKnockout || false,
             status: matchData.status          // Para saber se o jogo terminou 
           };
         });
@@ -56,11 +58,14 @@ export default function UserProfileScreen() {
             id: doc.id,
             scoreA: data.scoreA,
             scoreB: data.scoreB,
+            penaltyWinner: data.penaltyWinner || null, // 🔥 NOVO
             teamA: jogoInfo?.teamA || 'Time A', // Repassando os times separados
             teamB: jogoInfo?.teamB || 'Time B', 
             matchDate: jogoInfo?.date || '',     // Repassando a data do jogo
             realScoreA: jogoInfo?.realScoreA, // Repassando placar oficial
             realScoreB: jogoInfo?.realScoreB,
+            realPenaltyWinner: jogoInfo?.realPenaltyWinner, // 🔥 NOVO
+            isKnockout: jogoInfo?.isKnockout,
             status: jogoInfo?.status          // Repassando status oficial
           };
         });
@@ -91,30 +96,61 @@ export default function UserProfileScreen() {
   };
 
   const getScoreBadgeStyle = (pred: any) => {
-    // 🔥 NOVA REGRA: Se não existe placar oficial (Admin ainda não digitou), fica cinza.
-    // Usamos null e undefined para garantir que o número 0 seja aceito como placar válido!
-    if (pred.realScoreA === undefined || pred.realScoreA === null || pred.realScoreB === undefined || pred.realScoreB === null) {
-      return styles.scoreBadgeDefault;
+  // 1. Jogo não finalizado
+  if (
+    pred.realScoreA === undefined ||
+    pred.realScoreA === null ||
+    pred.realScoreB === undefined ||
+    pred.realScoreB === null
+  ) {
+    return styles.scoreBadgeDefault;
+  }
+
+  const pA = Number(pred.scoreA);
+  const pB = Number(pred.scoreB);
+  const pPenal = pred.penaltyWinner;
+
+  const rA = Number(pred.realScoreA);
+  const rB = Number(pred.realScoreB);
+  const rPenal = pred.realPenaltyWinner;
+
+  const isMataMata = pred.isKnockout;
+
+  // 🟢 CRAVADA
+  const acertouPlacar = (pA === rA && pB === rB);
+
+  if (acertouPlacar) {
+    if (isMataMata && rPenal && pPenal !== rPenal) {
+      return styles.scoreBadgePartial; // virou 4 pts
+    }
+    return styles.scoreBadgeExact;
+  }
+
+  // 🟡 ACERTOU VENCEDOR
+  if (
+    (pA > pB && rA > rB) ||
+    (pA < pB && rA < rB)
+  ) {
+    return styles.scoreBadgePartial;
+  }
+
+  // 🤝 EMPATE
+  if (pA === pB && rA === rB) {
+    if (isMataMata) {
+      if (pPenal === rPenal) {
+        return styles.scoreBadgePartial; // acertou pênalti
+      }
+
+      // 🔥 CONSOLAÇÃO (LARANJA)
+      return styles.scoreBadgeConsolation;
     }
 
-    const pA = Number(pred.scoreA);
-    const pB = Number(pred.scoreB);
-    const rA = Number(pred.realScoreA);
-    const rB = Number(pred.realScoreB);
+    return styles.scoreBadgePartial; // fase de grupos
+  }
 
-    // 🟢 CRAVADA NA MOSCA (Verde)
-    if (pA === rA && pB === rB) {
-      return styles.scoreBadgeExact;
-    }
-    
-    // 🟡 ACERTOU VENCEDOR OU EMPATE (Amarelo)
-    if ((pA > pB && rA > rB) || (pA < pB && rA < rB) || (pA === pB && rA === rB)) {
-      return styles.scoreBadgePartial;
-    }
-    
-    // 🔴 ERROU TUDO (Vermelho)
-    return styles.scoreBadgeWrong;
-  };
+  // 🔴 ERROU
+  return styles.scoreBadgeWrong;
+};
 
   if (loading) {
     return (
@@ -160,31 +196,57 @@ export default function UserProfileScreen() {
 
       {/* PALPITES DOS JOGOS */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Palpites por Jogo</Text>
-        {predictions.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhum palpite registrado para as partidas.</Text>
-        ) : (
-          predictions.map((pred) => {
-            const jogoJaComecou = isMatchLocked(pred.matchDate);
+          <Text style={styles.sectionTitle}>Palpites por Jogo</Text>
+          {predictions.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhum palpite registrado para as partidas.</Text>
+          ) : (
+            predictions.map((pred) => {
+              const jogoJaComecou = isMatchLocked(pred.matchDate);
+              const isEmpate = Number(pred.scoreA) === Number(pred.scoreB);
 
-            return (
-              <View key={pred.id} style={styles.matchCard}>
-                <Text style={styles.matchTeams}>{pred.teamA} x {pred.teamB}</Text>
-                
-                {jogoJaComecou ? (
-                  <View style={[styles.scoreBadge, getScoreBadgeStyle(pred)]}>
-                    <Text style={styles.scoreText}>{pred.scoreA} - {pred.scoreB}</Text>
+              return (
+                <View 
+                  key={pred.id} 
+                  style={[styles.matchCard, { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 }]}
+                >
+                  
+                  {/* 👈 LADO ESQUERDO: Nomes dos Times + Informações Extras de Pênaltis */}
+                  <View style={{ flex: 1, justifyContent: 'center', paddingRight: 12 }}>
+                    <Text style={styles.matchTeams}>{pred.teamA} x {pred.teamB}</Text>
+
+                    {/* 1. Palpite de Pênalti do Usuário (Apenas se for empate e o jogo começou) */}
+                    {jogoJaComecou && isEmpate && pred.penaltyWinner && (
+                      <Text style={{ fontSize: 13, color: '#f97316', marginTop: 4, fontWeight: 'bold' }}>
+                        ↳ Escolheu: {pred.penaltyWinner === 'A' ? pred.teamA : pred.teamB}
+                      </Text>
+                    )}
+
+                    {/* 2. Resultado Oficial dos Pênaltis (Se o jogo já encerrou) */}
+                    {jogoJaComecou && pred.realPenaltyWinner && (
+                      <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: '500' }}>
+                        Oficial: {pred.realPenaltyWinner === 'A' ? pred.teamA : pred.teamB} avançou
+                      </Text>
+                    )}
                   </View>
-                ) : (
-                  <View style={[styles.scoreBadge, styles.scoreBadgeLocked]}>
-                    <Text style={styles.scoreTextLocked}>🔒 Oculto</Text>
+
+                  {/* 👉 LADO DIREITO: Caixinha do Placar (Oculta ou Aberta com a cor do acerto) */}
+                  <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                    {jogoJaComecou ? (
+                      <View style={[styles.scoreBadge, getScoreBadgeStyle(pred)]}>
+                        <Text style={styles.scoreText}>{pred.scoreA} - {pred.scoreB}</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.scoreBadge, styles.scoreBadgeLocked]}>
+                        <Text style={styles.scoreTextLocked}>🔒 Oculto</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            );
-          })
-        )}
-      </View>
+
+                </View>
+              );
+            })
+          )}
+        </View>
     </ScrollView>
   );
 }
@@ -214,6 +276,7 @@ const styles = StyleSheet.create({
   scoreBadgeDefault: { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' },           // Neutro (Ainda jogando)
   scoreBadgeExact: { backgroundColor: '#d1fae5', borderColor: '#10b981' },             // Verde Claro (Cravada)
   scoreBadgePartial: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },           // Amarelo Claro (Acertou Vencedor)
+  scoreBadgeConsolation: { backgroundColor: '#fad9c1', borderColor: '#f97316' },
   scoreBadgeWrong: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },             // Vermelho Claro (Errou)
   
   scoreBadgeLocked: { backgroundColor: '#e2e8f0', borderColor: '#cbd5e1' },

@@ -106,9 +106,41 @@ const JOGOS_DA_COPA = [
   { id: 'jogo_72', teamA: 'Jordânia', teamB: 'Argentina', date: '2026-06-27T23:00:00-03:00' }
 ];
 
+const JOGOS_MATA_MATA = [
+  // 28 de junho, domingo
+  { id: 'jogo_73', teamA: 'África do Sul', teamB: 'Canadá', date: '2026-06-28T16:00:00-03:00' },
+  
+  // 29 de junho, segunda-feira
+  { id: 'jogo_74', teamA: 'Brasil', teamB: 'Japão', date: '2026-06-29T14:00:00-03:00' },
+  { id: 'jogo_75', teamA: 'Alemanha', teamB: 'Paraguai', date: '2026-06-29T17:30:00-03:00' },
+  { id: 'jogo_76', teamA: 'Holanda', teamB: 'Marrocos', date: '2026-06-29T22:00:00-03:00' },
+  
+  // 30 de junho, terça-feira
+  { id: 'jogo_77', teamA: 'Costa do Marfim', teamB: 'Noruega', date: '2026-06-30T14:00:00-03:00' },
+  { id: 'jogo_78', teamA: 'França', teamB: 'Suécia', date: '2026-06-30T18:00:00-03:00' },
+  { id: 'jogo_79', teamA: 'México', teamB: 'Equador', date: '2026-06-30T22:00:00-03:00' },
+  
+  // 1º de julho, quarta-feira
+  { id: 'jogo_80', teamA: 'Inglaterra', teamB: 'RD Congo', date: '2026-07-01T13:00:00-03:00' },
+  { id: 'jogo_81', teamA: 'Bélgica', teamB: 'Senegal', date: '2026-07-01T17:00:00-03:00' },
+  { id: 'jogo_82', teamA: 'Estados Unidos', teamB: 'Bósnia', date: '2026-07-01T21:00:00-03:00' },
+  
+  // 2 de julho, quinta-feira
+  { id: 'jogo_83', teamA: 'Espanha', teamB: 'Áustria', date: '2026-07-02T16:00:00-03:00' },
+  { id: 'jogo_84', teamA: 'Portugal', teamB: 'Croácia', date: '2026-07-02T20:00:00-03:00' },
+  
+  // 3 de julho, sexta-feira
+  { id: 'jogo_85', teamA: 'Suíça', teamB: 'Argélia', date: '2026-07-03T00:00:00-03:00' },
+  { id: 'jogo_86', teamA: 'Austrália', teamB: 'Egito', date: '2026-07-03T15:00:00-03:00' },
+  { id: 'jogo_87', teamA: 'Argentina', teamB: 'Cabo Verde', date: '2026-07-03T19:00:00-03:00' },
+  { id: 'jogo_88', teamA: 'Colômbia', teamB: 'Gana', date: '2026-07-03T22:30:00-03:00' }
+];
+
+
+
 export default function AdminScreen() {
   const [matches, setMatches] = useState<any[]>([]);
-  const [realScores, setRealScores] = useState<Record<string, { a: string; b: string }>>({});
+  const [realScores, setRealScores] = useState<Record<string, { a: string; b: string; penaltyWinner?: string }>>({});
   
   const [realChampion, setRealChampion] = useState('');
   const [realRunnerUp, setRealRunnerUp] = useState('');
@@ -120,11 +152,17 @@ export default function AdminScreen() {
 
   useEffect(() => {
     const fetchMatches = async () => {
-      const q = query(collection(db, 'matches'), where('status', '!=', 'finished'));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(collection(db, 'matches'));
+      const list: any[] = [];
       
-      // Adicionamos o 'as any' no final para acalmar o TypeScript
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // 🔥 A REGRA DE OURO: Ignora quem já tem placar! Mata os zumbis!
+        if (data.realScoreA === undefined || data.realScoreA === null || data.realScoreA === '') {
+          list.push({ id: doc.id, ...data });
+        }
+      });
       
       // Ordena os jogos por data para ficar organizado no painel
       list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -133,6 +171,27 @@ export default function AdminScreen() {
     };
     fetchMatches();
   }, []);
+
+  const injetarMataMata = async () => {
+  try {
+    const batch = writeBatch(db);
+    JOGOS_MATA_MATA.forEach((jogo) => {
+      const matchRef = doc(db, 'matches', jogo.id);
+      batch.set(matchRef, {
+        teamA: jogo.teamA,
+        teamB: jogo.teamB,
+        date: jogo.date,
+        isKnockout: true, // 🔥 O SEGREDO ESTÁ AQUI
+        status: 'scheduled'
+      }, { merge: true }); // O merge protege qualquer coisa que já exista!
+    });
+
+    await batch.commit();
+    alert('Mata-mata liberado com sucesso!');
+  } catch (error) {
+    console.error('Erro:', error);
+  }
+};
 
   // FUNÇÃO NOVA SEM O ALERT DE CONFIRMAÇÃO (Funciona na Web e no Celular)
   const injetarJogosNoBanco = async () => {
@@ -192,39 +251,73 @@ export default function AdminScreen() {
   };
 
   const calcularPontosJogo = async (matchId: string) => {
-    // ... [O restante do código do calcularPontosJogo continua igual]
     const placar = realScores[matchId];
     if (!placar?.a || !placar?.b) return Alert.alert('Erro', 'Digite o placar completo!');
+
+    const matchCorrente = matches.find(m => m.id === matchId);
+    const isMataMata = matchCorrente?.isKnockout; 
+
+    if (isMataMata && placar.a === placar.b && !placar.penaltyWinner) {
+      return Alert.alert('Atenção', 'Selecione quem venceu nos pênaltis oficiais!');
+    }
 
     setLoading(true);
     try {
       const realA = parseInt(placar.a);
       const realB = parseInt(placar.b);
+      const realPenal = placar.penaltyWinner || null; 
       const batch = writeBatch(db);
 
       const matchRef = doc(db, 'matches', matchId);
-      batch.update(matchRef, { realScoreA: realA, realScoreB: realB, status: 'finished' });
+      batch.update(matchRef, { realScoreA: realA, realScoreB: realB, realPenaltyWinner: realPenal, status: 'finished' });
 
       const q = query(collection(db, 'predictions'), where('matchId', '==', matchId));
       const predictionsSnap = await getDocs(q);
+
+      const VALOR_CRAVADA = isMataMata ? 7 : PONTOS_CRAVADA;
+      const VALOR_VENCEDOR = isMataMata ? 4 : PONTOS_VENCEDOR;
 
       predictionsSnap.forEach((predDoc) => {
         const palpite = predDoc.data();
         const predA = Number(palpite.scoreA);
         const predB = Number(palpite.scoreB);
+        const predPenal = palpite.penaltyWinner;
         
         let pontosGanhos = 0;
         let cravada = 0;
 
+        // 1. Acertou o placar exato de gols no tempo normal?
         if (predA === realA && predB === realB) {
-          pontosGanhos = PONTOS_CRAVADA;
-          cravada = 1;
-        } else if (
+          if (realPenal) { // Teve pênaltis
+            if (predPenal === realPenal) {
+              pontosGanhos = VALOR_CRAVADA; // 7 pts: Placar exato + Pênalti exato
+              cravada = 1;
+            } else {
+              pontosGanhos = VALOR_VENCEDOR; // 4 pts: Placar exato, mas errou o Pênalti
+            }
+          } else { // Sem pênaltis (alguém ganhou no tempo normal)
+            pontosGanhos = VALOR_CRAVADA; // 7 pts (Mata-mata) ou 5 pts (Grupos)
+            cravada = 1;
+          }
+        } 
+        // 2. Errou o placar, mas acertou o vencedor no tempo normal (ex: apostou 2x1, foi 3x1)
+        else if (
           (predA > predB && realA > realB) ||
-          (predA < predB && realA < realB) ||
-          (predA === predB && realA === realB)
+          (predA < predB && realA < realB)
         ) {
-          pontosGanhos = PONTOS_VENCEDOR;
+          pontosGanhos = VALOR_VENCEDOR; // 4 pts
+        } 
+        // 3. Errou o placar, mas ambos apostaram EMPATE (ex: apostou 2x2, foi 1x1)
+        else if (predA === predB && realA === realB) {
+          if (realPenal) { // Jogo de Mata-Mata
+            if (predPenal === realPenal) {
+              pontosGanhos = VALOR_VENCEDOR; // 4 pts: Errou gols, mas salvou no pênalti
+            } else {
+              pontosGanhos = 2; // 🔥 NOVA REGRA: 2 pts: Errou gols e errou pênalti, levou prêmio de consolação
+            }
+          } else { // Fase de Grupos
+            pontosGanhos = VALOR_VENCEDOR; // 2 pts (Valor padrão de tendência na fase de grupos)
+          }
         }
 
         if (pontosGanhos > 0) {
@@ -237,7 +330,7 @@ export default function AdminScreen() {
       });
 
       await batch.commit();
-      Alert.alert('Sucesso', 'Pontos do jogo distribuídos!');
+      Alert.alert('Sucesso', 'Pontos distribuídos! O sistema calculou os pênaltis e tendências.');
       setMatches(prev => prev.filter(m => m.id !== matchId));
     } catch (error) {
       Alert.alert('Erro', 'Ocorreu um erro.');
@@ -299,7 +392,17 @@ export default function AdminScreen() {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <Text style={styles.title}>Painel do Admin ⚙️</Text>
 
-      {/* BOTÃO MÁGICO PARA INJETAR JOGOS */}
+      <TouchableOpacity 
+        style={{ backgroundColor: '#8b5cf6', padding: 15, borderRadius: 10, marginVertical: 20 }} 
+        onPress={injetarMataMata}
+      >
+        <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+          🚀 Injetar Jogos do Mata-Mata
+        </Text>
+      </TouchableOpacity>
+
+      {/*
+      BOTÃO MÁGICO PARA INJETAR JOGOS
       <View style={[styles.section, { backgroundColor: '#fef3c7', padding: 16, borderRadius: 12 }]}>
         <Text style={[styles.sectionTitle, { color: '#d97706' }]}>Ferramentas de Desenvolvedor</Text>
         <Text style={{color: '#92400e', marginBottom: 16}}>Use isso para carregar a tabela inteira da Copa de uma vez.</Text>
@@ -307,6 +410,7 @@ export default function AdminScreen() {
           <Text style={styles.buttonText}>💉 Injetar Tabela de Jogos</Text>
         </TouchableOpacity>
       </View>
+      */}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. Encerrar Partidas</Text>
@@ -315,6 +419,7 @@ export default function AdminScreen() {
         {matches.map(item => (
           <View key={item.id} style={styles.card}>
             <Text style={styles.matchTitle}>{item.teamA} x {item.teamB}</Text>
+            
             <View style={styles.row}>
               <TextInput 
                 style={styles.input} keyboardType="numeric" placeholder="0"
@@ -326,7 +431,30 @@ export default function AdminScreen() {
                 onChangeText={(val) => setRealScores(prev => ({ ...prev, [item.id]: { ...prev[item.id], b: val } }))}
               />
             </View>
-            <TouchableOpacity style={styles.button} onPress={() => calcularPontosJogo(item.id)} disabled={loading}>
+
+            {/* 🔥 NOVO: SELETOR DE PÊNALTIS PARA O ADMIN */}
+            {item.isKnockout && realScores[item.id]?.a !== undefined && realScores[item.id]?.a !== '' && realScores[item.id]?.a === realScores[item.id]?.b && (
+              <View style={{ marginTop: 12, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Text style={{ textAlign: 'center', marginBottom: 8, fontWeight: 'bold', color: '#64748b' }}>Quem venceu nos pênaltis?</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity 
+                    style={{ flex: 1, padding: 10, borderRadius: 6, borderWidth: 1, borderColor: realScores[item.id]?.penaltyWinner === 'A' ? '#10b981' : '#cbd5e1', backgroundColor: realScores[item.id]?.penaltyWinner === 'A' ? '#d1fae5' : '#fff', alignItems: 'center' }}
+                    onPress={() => setRealScores(prev => ({ ...prev, [item.id]: { ...prev[item.id], penaltyWinner: 'A' } }))}
+                  >
+                    <Text style={{ fontWeight: 'bold', color: '#334155' }}>{item.teamA}</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={{ flex: 1, padding: 10, borderRadius: 6, borderWidth: 1, borderColor: realScores[item.id]?.penaltyWinner === 'B' ? '#10b981' : '#cbd5e1', backgroundColor: realScores[item.id]?.penaltyWinner === 'B' ? '#d1fae5' : '#fff', alignItems: 'center' }}
+                    onPress={() => setRealScores(prev => ({ ...prev, [item.id]: { ...prev[item.id], penaltyWinner: 'B' } }))}
+                  >
+                    <Text style={{ fontWeight: 'bold', color: '#334155' }}>{item.teamB}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.button, { marginTop: 16 }]} onPress={() => calcularPontosJogo(item.id)} disabled={loading}>
               <Text style={styles.buttonText}>Salvar Jogo</Text>
             </TouchableOpacity>
           </View>

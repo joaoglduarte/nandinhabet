@@ -1,28 +1,23 @@
-# NandinhaBet ⚽
+# 🏆 Bolão da Copa 2026 - App
 
-O NandinhaBet é uma plataforma de bolão esportivo completa, desenvolvida com React Native (Expo) e Firebase, permitindo palpites em tempo real, ranking dinâmico e integração com sistemas de gestão.
+Um aplicativo móvel e web desenvolvido em **React Native (Expo)** e **Firebase** para gerenciar um Bolão da Copa do Mundo, permitindo que os usuários façam palpites, acompanhem o ranking em tempo real e vejam os palpites de outros jogadores através de um Mural de Transparência.
 
-## 🚀 Funcionalidades
-- **Palpites em Tempo Real**: Sistema de palpites com travamento automático no início da partida (com tolerância de 15min).
-- **Ranking Inteligente**: Exibição de pontuação, avatares customizados e critérios de desempate.
-- **Sistema de Pontuação Justo**: 
-    - 5 pontos para placar exato (cravada).
-    - 2 pontos para acerto de vencedor/empate.
-- **Segurança Blindada**: Regras do Firestore que impedem manipulação de pontos pelos usuários.
-- **Experiência PWA**: Otimizado para rodar como app na tela inicial (iOS/Android) via Web.
-- **Feedback Proativo**: Notificações Toast elegantes para ações de usuário.
+## ✨ Novidades da Última Atualização
+- **Fase Mata-Mata Ativada:** Suporte completo para os jogos eliminatórios (Oitavas, Quartas, Semis e Final).
+- **Decisão por Pênaltis:** Se o usuário palpitar um empate no tempo normal durante o mata-mata, o sistema revela automaticamente botões para escolher quem avança nos pênaltis.
+- **Mural de Transparência Atualizado:** Agora exibe não apenas os placares, mas também quem os usuários escolheram como vencedor nas disputas de pênaltis.
 
-## 🛠 Tecnologias
-- **Frontend**: React Native, Expo, Expo Router.
-- **Backend**: Firebase Firestore (NoSQL), Firebase Auth.
-- **Design**: DiceBear Avatars API.
+## ⚙️ Funcionalidades Principais
+- **Autenticação:** Login de usuários integrado.
+- **Painel de Palpites:** Interface intuitiva para palpitar nos jogos antes do bloqueio (início da partida).
+- **Painel de Admin:** Área restrita para os administradores encerrarem jogos, lançarem os placares oficiais, escolherem vencedores de pênaltis e distribuírem pontos.
+- **Sistema de Pontuação Automático:**
+  - **Cravada (5 pontos):** Acertar o placar exato (e o vencedor dos pênaltis, se houver).
+  - **Vencedor (2 pontos):** Acertar a tendência (quem ganhou ou se foi empate), mas errar o placar exato.
+- **Fechamento do Torneio:** Distribuição de bônus no final da Copa (Campeão, Vice, 3º Lugar e Artilheiro).
 
-## 📦 Como rodar o projeto
-1. Clone o repositório.
-2. Instale as dependências: `npm install`.
-3. Configure o seu `firebaseConfig.js` com as suas credenciais.
-4. Rode o projeto: `npx expo start -c`.
-
-## ⚙️ Configuração de Produção
-- O app está configurado como **PWA**.
-- As regras de segurança do Firestore devem ser aplicadas através do console do Firebase para garantir a integridade dos dados de pontuação.
+## 🛠️ Tecnologias Utilizadas
+- [React Native](https://reactnative.dev/) / [Expo](https://expo.dev/) (Framework principal e Expo Router)
+- [Firebase Firestore](https://firebase.google.com/) (Banco de Dados em tempo real)
+- [Firebase Hosting](https://firebase.google.com/) (Hospedagem da versão Web/Admin)
+- **TypeScript** (Tipagem de dados)
