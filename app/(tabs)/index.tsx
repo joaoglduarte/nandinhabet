@@ -314,7 +314,13 @@ useEffect(() => {
   }
 
   // 🟡 4 ou 2 Pontos: TENDÊNCIA
-  if ((pA > pB && rA > rB) || (pA < pB && rA < rB)) return styles.scoreBadgePartial;
+  // Espelhando a inteligência do Admin: Acertou quem avançou (no tempo normal OU nos pênaltis)
+  if (
+    (pA > pB && (rA > rB || rPenal === 'A')) || 
+    (pA < pB && (rA < rB || rPenal === 'B'))
+  ) {
+    return styles.scoreBadgePartial; 
+  }
   
   // Caso de Empate
   if (pA === pB && rA === rB) {

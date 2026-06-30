@@ -56,7 +56,7 @@ export default function RulesScreen() {
             <Text style={styles.ruleName}>Acerto de Tendência ou Quase</Text>
           </View>
           <Text style={styles.ruleDesc}>
-            Previu a tendência. Para empates: Você previu o empate, mas errou os gols no tempo normal e também errou quem passou nos pênaltis. Pelo menos a leitura de jogo foi boa! {'\n'}
+            Previu a tendência. Para empates: Você previu o empate, mas errou os gols no tempo normal ou errou quem passou nos pênaltis. Pelo menos a leitura de jogo foi boa! {'\n'}
             <Text style={styles.example}>Ex: Apostou 1x0, o jogo terminou 3x0 (acertou o vencedor). {'\n'}Apostou 1x1, o jogo terminou 0x0 (acertou o empate).</Text>
           </Text>
         </View>

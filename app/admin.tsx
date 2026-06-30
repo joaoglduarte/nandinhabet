@@ -302,8 +302,8 @@ export default function AdminScreen() {
         } 
         // 2. Errou o placar, mas acertou o vencedor no tempo normal (ex: apostou 2x1, foi 3x1)
         else if (
-          (predA > predB && realA > realB) ||
-          (predA < predB && realA < realB)
+          (predA > predB && (realA > realB || realPenal === 'A')) ||
+          (predA < predB && (realA < realB || realPenal === 'B'))
         ) {
           pontosGanhos = VALOR_VENCEDOR; // 4 pts
         } 
