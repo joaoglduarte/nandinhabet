@@ -317,7 +317,9 @@ useEffect(() => {
   // Espelhando a inteligência do Admin: Acertou quem avançou (no tempo normal OU nos pênaltis)
   if (
     (pA > pB && (rA > rB || rPenal === 'A')) || 
-    (pA < pB && (rA < rB || rPenal === 'B'))
+    (pA < pB && (rA < rB || rPenal === 'B')) ||
+    (pA === pB && pPenal === 'A' && rA > rB) || // 🔥 Espelhado aqui também!
+    (pA === pB && pPenal === 'B' && rA < rB)    // 🔥 Espelhado aqui também!
   ) {
     return styles.scoreBadgePartial; 
   }

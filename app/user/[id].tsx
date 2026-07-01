@@ -128,8 +128,10 @@ export default function UserProfileScreen() {
 
   // 🟡 ACERTOU VENCEDOR
   if (
-    (pA > pB && rA > rB) ||
-    (pA < pB && rA < rB)
+    (pA > pB && (rA > rB || rPenal === 'A')) || // Apostou vitória direta, e ganhou direto OU nos pênaltis
+    (pA < pB && (rA < rB || rPenal === 'B')) ||
+    (pA === pB && pPenal === 'A' && rA > rB) || // 🔥 NOVO: Apostou empate + Pênalti A, mas A ganhou direto
+    (pA === pB && pPenal === 'B' && rA < rB)    // 🔥 NOVO: Apostou empate + Pênalti B, mas B ganhou direto
   ) {
     return styles.scoreBadgePartial;
   }

@@ -288,35 +288,37 @@ export default function AdminScreen() {
 
         // 1. Acertou o placar exato de gols no tempo normal?
         if (predA === realA && predB === realB) {
-          if (realPenal) { // Teve pênaltis
+          if (realPenal) { 
             if (predPenal === realPenal) {
-              pontosGanhos = VALOR_CRAVADA; // 7 pts: Placar exato + Pênalti exato
+              pontosGanhos = VALOR_CRAVADA; 
               cravada = 1;
             } else {
-              pontosGanhos = VALOR_VENCEDOR; // 4 pts: Placar exato, mas errou o Pênalti
+              pontosGanhos = VALOR_VENCEDOR; 
             }
-          } else { // Sem pênaltis (alguém ganhou no tempo normal)
-            pontosGanhos = VALOR_CRAVADA; // 7 pts (Mata-mata) ou 5 pts (Grupos)
+          } else { 
+            pontosGanhos = VALOR_CRAVADA; 
             cravada = 1;
           }
         } 
-        // 2. Errou o placar, mas acertou o vencedor no tempo normal (ex: apostou 2x1, foi 3x1)
+        // 2. ACERTOU A TENDÊNCIA DE QUEM AVANÇA (4 PONTOS)
         else if (
-          (predA > predB && (realA > realB || realPenal === 'A')) ||
-          (predA < predB && (realA < realB || realPenal === 'B'))
+          (predA > predB && (realA > realB || realPenal === 'A')) || // Vitória direta do A, e deu A
+          (predA < predB && (realA < realB || realPenal === 'B')) || // Vitória direta do B, e deu B
+          (predA === predB && predPenal === 'A' && realA > realB) || // 🔥 NOVO: Apostou empate + pênalti A, mas A ganhou direto
+          (predA === predB && predPenal === 'B' && realA < realB)    // 🔥 NOVO: Apostou empate + pênalti B, mas B ganhou direto
         ) {
-          pontosGanhos = VALOR_VENCEDOR; // 4 pts
+          pontosGanhos = VALOR_VENCEDOR; 
         } 
-        // 3. Errou o placar, mas ambos apostaram EMPATE (ex: apostou 2x2, foi 1x1)
+        // 3. Ambas as partes previram EMPATE, mas erraram o placar de gols
         else if (predA === predB && realA === realB) {
-          if (realPenal) { // Jogo de Mata-Mata
+          if (realPenal) { 
             if (predPenal === realPenal) {
-              pontosGanhos = VALOR_VENCEDOR; // 4 pts: Errou gols, mas salvou no pênalti
+              pontosGanhos = VALOR_VENCEDOR; 
             } else {
-              pontosGanhos = 2; // 🔥 NOVA REGRA: 2 pts: Errou gols e errou pênalti, levou prêmio de consolação
+              pontosGanhos = 2; 
             }
-          } else { // Fase de Grupos
-            pontosGanhos = VALOR_VENCEDOR; // 2 pts (Valor padrão de tendência na fase de grupos)
+          } else { 
+            pontosGanhos = VALOR_VENCEDOR; 
           }
         }
 
@@ -330,7 +332,7 @@ export default function AdminScreen() {
       });
 
       await batch.commit();
-      Alert.alert('Sucesso', 'Pontos distribuídos! O sistema calculou os pênaltis e tendências.');
+      Alert.alert('Sucesso', 'Pontos distribuídos com correção para apostas de pênalti!');
       setMatches(prev => prev.filter(m => m.id !== matchId));
     } catch (error) {
       Alert.alert('Erro', 'Ocorreu um erro.');
